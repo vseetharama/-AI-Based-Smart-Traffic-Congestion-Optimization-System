@@ -29,17 +29,56 @@ class TrafficController:
         best = max(candidates, key=lambda item: (item[0], item[1], -int(item[2].replace("road", ""))))
         return best[2]
 
-    def _build_road_summaries(self, snapshot):
+    def _compute_waiting_time(self, snapshot, current_green_road, current_timer, target_road_id):
+        if not current_green_road:
+            return 0
+
+        if target_road_id == current_green_road:
+            return 0
+
+        waiting_time = max(int(current_timer or 0), 0)
+        current_road = current_green_road
+        seen_roads = set()
+
+        while True:
+            if current_road in seen_roads:
+                break
+            seen_roads.add(current_road)
+
+            next_road = self._select_green_road(snapshot)
+            if next_road == target_road_id:
+                return waiting_time
+
+            if next_road == current_road:
+                break
+
+            next_time = snapshot.get(next_road, {}).get("recommended_green_time", 0) or 0
+            waiting_time += max(int(next_time), 0)
+            current_road = next_road
+
+        return waiting_time
+
+    def _build_road_summaries(self, snapshot, current_green_road, current_timer):
         summaries = {}
         for road_id, data in snapshot.items():
+            vehicle_count = data.get("vehicle_count", 0) or 0
+            last_updated = data.get("last_updated")
+            has_video = vehicle_count > 0 and last_updated is not None
+
+            prediction = data.get("prediction", "unknown")
+            if not has_video:
+                prediction = "No Video"
+
             summaries[road_id] = {
-                "vehicle_count": data.get("vehicle_count", 0),
+                "vehicle_count": vehicle_count,
                 "density_score": data.get("density_score", 0.0),
-                "density_level": data.get("density_level", "LOW"),
-                "prediction": data.get("prediction", "unknown"),
+                "density_level": "LOW" if not has_video else (data.get("density_level", "LOW") or "LOW"),
+                "prediction": prediction,
                 "recommended_green_time": data.get("recommended_green_time", 0),
                 "signal_status": data.get("signal_status", "red"),
-                "last_updated": data.get("last_updated"),
+                "last_updated": last_updated,
+                "remaining_time": current_timer if current_green_road == road_id else 0,
+                "waiting_time": 0 if current_green_road == road_id else self._compute_waiting_time(snapshot, current_green_road, current_timer, road_id),
             }
         return summaries
 
@@ -52,7 +91,7 @@ class TrafficController:
             processed_data["signal_status"] = "GREEN" if road_id == current_green_road else "RED"
             processed_snapshot[road_id] = processed_data
 
-        road_summaries = self._build_road_summaries(processed_snapshot)
+        road_summaries = self._build_road_summaries(processed_snapshot, current_green_road, current_timer)
         with controller_state_lock:
             controller_state.update({
                 "current_green_road": current_green_road,

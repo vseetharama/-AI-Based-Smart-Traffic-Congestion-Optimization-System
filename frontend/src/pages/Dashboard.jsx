@@ -1,41 +1,68 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import RoadCard from "../components/RoadCard";
 import BackendStatus from "../components/BackendStatus";
+import { getDashboard } from "../api/trafficApi";
 
 function Dashboard() {
-  const [roads, setRoads] = useState([
-    { name: "Road 1", signal: "GREEN", timer: 10, prediction: "Peak soon" },
-    { name: "Road 2", signal: "RED", timer: 10, prediction: "Normal" },
-    { name: "Road 3", signal: "RED", timer: 10, prediction: "Low traffic" },
-    { name: "Road 4", signal: "RED", timer: 10, prediction: "Normal" }
-  ]);
-
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [roads, setRoads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRoads(prev => {
-        let updated = [...prev];
+    let isMounted = true;
 
-        updated[activeIndex].timer--;
+    async function fetchDashboardData() {
+      try {
+        setLoading(true);
+        setError("");
 
-        if (updated[activeIndex].timer <= 0) {
-          updated[activeIndex].signal = "RED";
-          updated[activeIndex].timer = 10;
+        const data = await getDashboard();
 
-          let next = (activeIndex + 1) % 4;
-          updated[next].signal = "GREEN";
-
-          setActiveIndex(next);
+        if (!isMounted) {
+          return;
         }
 
-        return updated;
-      });
-    }, 1000);
+        const summaries = data?.road_summaries || {};
+        const mappedRoads = Object.entries(summaries)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([roadId, summary]) => ({
+            id: roadId,
+            name: `Road ${roadId.replace("road", "")}`,
+            signal: (summary?.signal_status || "RED").toUpperCase(),
+            timer:
+              data?.current_green_road === roadId
+                ? data?.current_timer ?? summary?.recommended_green_time ?? 0
+                : summary?.recommended_green_time ?? 0,
+            vehicleCount: summary?.vehicle_count ?? 0,
+            densityLevel: summary?.density_level || "UNKNOWN",
+            densityScore: summary?.density_score ?? 0,
+            prediction: summary?.prediction || "unknown",
+            recommendedGreenTime: summary?.recommended_green_time ?? 0,
+            lastUpdated: summary?.last_updated || null,
+          }));
 
-    return () => clearInterval(interval);
-  }, [activeIndex]);
+        setRoads(mappedRoads);
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        setError("Unable to load dashboard data.");
+        setRoads([]);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <Layout>
@@ -45,6 +72,18 @@ function Dashboard() {
       </h1>
 
       <BackendStatus />
+
+      {loading && (
+        <div style={{ textAlign: "center", marginBottom: "20px", color: "#cbd5e1" }}>
+          Loading dashboard data...
+        </div>
+      )}
+
+      {error && (
+        <div style={{ textAlign: "center", marginBottom: "20px", color: "#f87171" }}>
+          {error}
+        </div>
+      )}
 
       <div
         style={{
