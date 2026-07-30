@@ -1,2 +1,72 @@
-# Local Netlify folder
-.netlify
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================
+# Node
+# =========================
+node_modules/
+frontend/node_modules/
+
+dist/
+dist-ssr/
+build/
+
+# =========================
+# Environment
+# =========================
+.env
+*.local
+.venv/
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# Backend Generated Files
+# =========================
+backend/output.mp4
+backend/vehicle_data.txt
+
+# Uploaded videos
+backend/uploads/
+
+# Temporary videos (if only for testing)
+backend/videos/
+
+# Temporary response files
+upload_response.json
+
+# =========================
+# IDE
+# =========================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Visual Studio
+# =========================
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

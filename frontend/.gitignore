@@ -29,3 +29,15 @@ dist/
 build/
 
 .env
+# Python
+__pycache__/
+*.pyc
+# Temporary files
+*.log
+upload_response.json
+
+# OS files
+.DS_Store
+Thumbs.db
+# Virtual environment
+.venv/
