@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Layout from "../components/Layout";
 import RoadCard from "../components/RoadCard";
+import BackendStatus from "../components/BackendStatus";
 
 function Dashboard() {
   const [roads, setRoads] = useState([
@@ -42,6 +43,8 @@ function Dashboard() {
       <h1 style={{ textAlign: "center", marginBottom: "20px" }}>
         🚦 AI Traffic Control System (Live Demo)
       </h1>
+
+      <BackendStatus />
 
       <div
         style={{
