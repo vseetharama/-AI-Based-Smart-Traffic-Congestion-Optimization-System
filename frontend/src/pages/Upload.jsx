@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Layout from "../components/Layout";
 import UploadBox from "../components/UploadBox";
+import { uploadVideo } from "../api/trafficApi";
 
 function Upload() {
 
@@ -48,22 +49,12 @@ function Upload() {
       if (videos.road3) formData.append("road3", videos.road3);
       if (videos.road4) formData.append("road4", videos.road4);
 
-      // Send POST request to backend
-      const response = await fetch("http://localhost:5000/upload", {
-        method: "POST",
-        body: formData
-      });
+      // Send POST request to backend via centralized API layer
+      const data = await uploadVideo(formData);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        console.log("Upload successful:", data);
-        alert("✅ Videos uploaded successfully!");
-        setVideos({}); // Clear files after successful upload
-      } else {
-        console.error("Upload failed:", data);
-        alert(`❌ Upload failed: ${data.message || "Unknown error"}`);
-      }
+      console.log("Upload successful:", data);
+      alert("✅ Videos uploaded successfully!");
+      setVideos({}); // Clear files after successful upload
     } catch (error) {
       console.error("Upload error:", error);
       alert(`❌ Error: ${error.message}`);
