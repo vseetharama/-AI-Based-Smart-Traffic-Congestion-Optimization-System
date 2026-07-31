@@ -8,6 +8,7 @@ from shared_state import (
     road_results_lock,
     controller_state_lock,
 )
+from traffic_logger import TrafficLogger
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class TrafficController:
         self.cycle_interval = cycle_interval
         self.is_running = False
         self._lock = threading.Lock()
+        self._traffic_logger = TrafficLogger()
 
     def _select_green_road(self, snapshot):
         candidates = []
@@ -130,6 +132,9 @@ class TrafficController:
                     )
 
                 self._update_controller_state(self.current_green_road, self.current_timer, snapshot)
+                with controller_state_lock:
+                    road_summaries = controller_state.get("road_summaries", {})
+                self._traffic_logger.log_snapshot(road_summaries, self.current_green_road, self.current_timer)
             except Exception as e:
                 logger.error("TrafficController error: %s", e)
             finally:
