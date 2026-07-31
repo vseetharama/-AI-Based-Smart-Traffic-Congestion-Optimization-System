@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import RoadCard from "../components/RoadCard";
 import BackendStatus from "../components/BackendStatus";
@@ -8,18 +9,29 @@ function Dashboard() {
   const [roads, setRoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const isMountedRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  const hasInitialLoadRef = useRef(false);
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
 
-    async function fetchDashboardData() {
+    const fetchDashboardData = async (isInitialFetch = false) => {
+      if (isFetchingRef.current) {
+        return;
+      }
+
+      isFetchingRef.current = true;
+
       try {
-        setLoading(true);
+        if (isInitialFetch && !hasInitialLoadRef.current) {
+          setLoading(true);
+        }
         setError("");
 
         const data = await getDashboard();
 
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -34,6 +46,8 @@ function Dashboard() {
               data?.current_green_road === roadId
                 ? data?.current_timer ?? summary?.recommended_green_time ?? 0
                 : summary?.recommended_green_time ?? 0,
+            remainingTime: data?.current_green_road === roadId ? data?.current_timer ?? 0 : 0,
+            waitingTime: data?.current_green_road === roadId ? 0 : summary?.waiting_time ?? 0,
             vehicleCount: summary?.vehicle_count ?? 0,
             densityLevel: summary?.density_level || "UNKNOWN",
             densityScore: summary?.density_score ?? 0,
@@ -42,36 +56,55 @@ function Dashboard() {
             lastUpdated: summary?.last_updated || null,
           }));
 
+        hasInitialLoadRef.current = true;
+        setLoading(false);
         setRoads(mappedRoads);
       } catch (err) {
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           return;
         }
 
         setError("Unable to load dashboard data.");
         setRoads([]);
       } finally {
-        if (isMounted) {
+        if (isMountedRef.current && !hasInitialLoadRef.current) {
           setLoading(false);
         }
+        isFetchingRef.current = false;
       }
-    }
+    };
 
-    fetchDashboardData();
+    fetchDashboardData(true);
+
+    const intervalId = window.setInterval(() => {
+      fetchDashboardData(false);
+    }, 1000);
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
   return (
     <Layout>
 
-      <h1 style={{ textAlign: "center", marginBottom: "20px" }}>
-        🚦 AI Traffic Control System (Live Demo)
-      </h1>
+      <div className="text-center mb-6">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text mb-3">
+          🚦 Live Monitoring Dashboard
+        </h1>
+        <p className="text-gray-400 text-lg">
+          Real-time traffic monitoring with live signal and vehicle insights.
+        </p>
+      </div>
 
       <BackendStatus />
+
+      <div className="d-flex justify-content-center mb-4">
+        <Link to="/analytics" className="btn btn-outline-light">
+          View Analytics →
+        </Link>
+      </div>
 
       {loading && (
         <div style={{ textAlign: "center", marginBottom: "20px", color: "#cbd5e1" }}>

@@ -19,9 +19,10 @@ export default function Layout({ children }) {
 
         <div className="flex gap-6 text-sm">
           <Link to="/">Home</Link>
-          <Link to="/dashboard">Demo</Link>
-          <Link to="/members">Team</Link>
+          <Link to="/dashboard">Dashboard</Link>
+          <Link to="/analytics">Analytics</Link>
           <Link to="/upload">Upload</Link>
+          <Link to="/members">Team</Link>
         </div>
       </div>
 

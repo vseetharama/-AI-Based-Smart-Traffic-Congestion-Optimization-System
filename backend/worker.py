@@ -8,6 +8,12 @@ from shared_state import road_results, road_results_lock, yolo_inference_lock
 
 logger = logging.getLogger(__name__)
 
+GREEN_TIME = {
+    "LOW": 40,
+    "MEDIUM": 60,
+    "HIGH": 120,
+}
+
 
 class Worker:
     def __init__(self, road_id, video_source, frame_skip=5):
@@ -56,12 +62,9 @@ class Worker:
             return "medium"
         return "low"
 
-    def _recommend_green_time(self, prediction):
-        if prediction == "high":
-            return 45
-        if prediction == "medium":
-            return 30
-        return 15
+    def _recommend_green_time(self, density_level):
+        level = (density_level or "LOW").upper()
+        return GREEN_TIME.get(level, GREEN_TIME["LOW"])
 
     def _update_road_results(self, vehicle_count, density, prediction, recommended_green_time):
         timestamp = datetime.now().isoformat()
@@ -107,8 +110,9 @@ class Worker:
                     continue
 
                 density = self._calculate_density(vehicle_count)
+                density_level = self._density_level(density)
                 prediction = self._generate_prediction(vehicle_count, density)
-                recommended_green_time = self._recommend_green_time(prediction)
+                recommended_green_time = self._recommend_green_time(density_level)
 
                 self._update_road_results(vehicle_count, density, prediction, recommended_green_time)
 
