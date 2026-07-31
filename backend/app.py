@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from shared_state import controller_state, controller_state_lock
 from worker import Worker
 from traffic_controller import TrafficController
+from database import get_database, get_database_name
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -65,6 +66,16 @@ def start_background_threads():
     initialize_threads()
 
 
+def initialize_mongodb():
+    """Initialize MongoDB at startup without affecting current APIs."""
+    try:
+        db = get_database()
+        db.command("ping")
+        print(f"MongoDB initialization complete for database: {get_database_name()}")
+    except Exception as exc:
+        print(f"MongoDB initialization skipped: {exc}")
+
+
 @app.route("/upload", methods=["POST"])
 def upload_files():
     """
@@ -119,6 +130,7 @@ def health():
 
 
 if __name__ == "__main__":
+    initialize_mongodb()
     start_background_threads()
     print("🚀 Starting Flask server on http://localhost:5000")
     app.run(debug=True, host="localhost", port=5000)

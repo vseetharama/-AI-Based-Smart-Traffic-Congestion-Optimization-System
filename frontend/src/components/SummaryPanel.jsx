@@ -47,7 +47,7 @@ function SummaryPanel({ metrics, status, lastUpdated }) {
   ];
 
   return (
-    <div className="row g-3 mb-4">
+    <div className="row g-2 mb-3">
       {cards.map((card) => (
         <div key={card.title} className="col-12 col-md-6 col-xl-4">
           <InsightCard {...card} />

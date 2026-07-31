@@ -9,18 +9,18 @@ function InsightCard({ title, value, icon, subtitle, tone = "default" }) {
   const activeTone = tones[tone] || tones.default;
 
   return (
-    <div className="card h-100" style={{ background: "rgba(10,14,24,0.9)", border: `1px solid ${activeTone.border}`, borderRadius: "18px" }}>
-      <div className="card-body p-4">
+    <div className="card h-100" style={{ background: "rgba(10,14,24,0.94)", border: `1px solid ${activeTone.border}`, borderRadius: "18px", boxShadow: "0 10px 24px rgba(2, 8, 23, 0.28)" }}>
+      <div className="card-body p-3 p-md-4">
         <div className="d-flex align-items-center gap-3">
           <div style={{ width: "44px", height: "44px", borderRadius: "12px", display: "grid", placeItems: "center", background: activeTone.iconBg, color: activeTone.iconColor, fontSize: "20px" }}>
             {icon}
           </div>
-          <div>
-            <h6 className="mb-1 text-slate-300" style={{ fontSize: "0.9rem" }}>{title}</h6>
-            <div className="fw-bold text-white" style={{ fontSize: "1.05rem" }}>{value}</div>
+          <div className="min-w-0">
+            <h6 className="mb-1 text-white fw-semibold" style={{ fontSize: "0.9rem" }}>{title}</h6>
+            <div className="fw-bold text-white" style={{ fontSize: "1.02rem", lineHeight: 1.3 }}>{value}</div>
           </div>
         </div>
-        {subtitle && <div className="mt-3 text-muted small">{subtitle}</div>}
+        {subtitle && <div className="mt-3" style={{ color: "#cbd5e1", fontSize: "0.84rem", lineHeight: 1.5 }}>{subtitle}</div>}
       </div>
     </div>
   );

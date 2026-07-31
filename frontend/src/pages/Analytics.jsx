@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import BackendStatus from "../components/BackendStatus";
 import SummaryPanel from "../components/SummaryPanel";
@@ -21,6 +21,7 @@ function formatTimestamp(timestamp) {
 }
 
 function Analytics() {
+  const navigate = useNavigate();
   const [roads, setRoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -145,11 +146,11 @@ function Analytics() {
 
   return (
     <Layout>
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text mb-3">
-          📊 Real-Time Traffic Analytics
+      <div className="text-center mb-5">
+        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white mb-2">
+          Real-Time Traffic Analytics
         </h1>
-        <p className="text-gray-400 text-lg">
+        <p className="text-slate-400 text-base md:text-lg max-w-2xl mx-auto">
           Live insights derived from the existing dashboard polling response.
         </p>
       </div>
@@ -157,9 +158,13 @@ function Analytics() {
       <BackendStatus />
 
       <div className="d-flex justify-content-center mb-4">
-        <Link to="/dashboard" className="btn btn-outline-light">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard")}
+          className="btn btn-outline-light btn-sm px-3 py-2"
+        >
           ← Back to Live Dashboard
-        </Link>
+        </button>
       </div>
 
       {loading && <div className="text-center text-slate-300 mb-4">Loading analytics data...</div>}
@@ -171,16 +176,16 @@ function Analytics() {
       {metrics.hasTraffic ? (
         <ChartsPanel roads={roads} trendData={trendData} hasTraffic={metrics.hasTraffic} />
       ) : (
-        <div className="card mb-4" style={{ background: "rgba(15, 23, 42, 0.92)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px" }}>
+        <div className="card mb-4" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
           <div className="card-body p-4 text-center text-slate-300">
             No traffic data available
           </div>
         </div>
       )}
 
-      <div className="card mt-4" style={{ background: "rgba(15, 23, 42, 0.92)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px" }}>
+      <div className="card mt-3" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
         <div className="card-body p-4">
-          <h4 className="mb-3 text-white">📌 Future Analytics Modules</h4>
+          <h4 className="mb-3 text-white fw-semibold">Future Analytics Modules</h4>
           <div className="row g-3">
             {[
               "Historical Analytics",
