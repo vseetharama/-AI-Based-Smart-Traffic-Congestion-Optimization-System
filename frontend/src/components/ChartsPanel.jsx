@@ -2,8 +2,16 @@ import { useMemo } from "react";
 import { BarChart, Bar, CartesianGrid, Cell, PieChart, Pie, ResponsiveContainer, Tooltip, XAxis, YAxis, LineChart, Line } from "recharts";
 import ChartCard from "./ChartCard";
 
-function ChartsPanel({ roads, trendData, hasTraffic }) {
+function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waitingTrend = [] }) {
   const densityDistribution = useMemo(() => {
+    if (densityData?.length) {
+      return densityData.map((item) => ({
+        name: item.name || item.label || "UNKNOWN",
+        value: item.value || 0,
+        color: item.color || (item.name === "HIGH" ? "#f87171" : item.name === "MEDIUM" ? "#facc15" : "#38bdf8"),
+      }));
+    }
+
     const counts = { LOW: 0, MEDIUM: 0, HIGH: 0 };
     roads.forEach((road) => {
       const density = (road.densityLevel || "UNKNOWN").toUpperCase();
@@ -17,7 +25,7 @@ function ChartsPanel({ roads, trendData, hasTraffic }) {
       { name: "MEDIUM", value: counts.MEDIUM, color: "#facc15" },
       { name: "HIGH", value: counts.HIGH, color: "#f87171" },
     ];
-  }, [roads]);
+  }, [roads, densityData]);
 
   const vehicleBars = useMemo(() => {
     return roads.map((road) => ({
@@ -89,6 +97,26 @@ function ChartsPanel({ roads, trendData, hasTraffic }) {
             </div>
           ) : (
             <div className="text-center text-muted py-5">No traffic data available</div>
+          )}
+        </ChartCard>
+      </div>
+
+      <div className="col-12">
+        <ChartCard title="Waiting Time Trend" subtitle="Average waiting time across the selected period">
+          {waitingTrend.length > 0 ? (
+            <div style={{ width: "100%", height: 280 }}>
+              <ResponsiveContainer>
+                <LineChart data={waitingTrend} animationDuration={500}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="time" stroke="#cbd5e1" tick={{ fill: "#cbd5e1", fontSize: 12 }} />
+                  <YAxis stroke="#cbd5e1" tick={{ fill: "#cbd5e1", fontSize: 12 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="waiting" stroke="#f59e0b" strokeWidth={2} dot={false} animationDuration={500} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="text-center text-muted py-5">No waiting trend data available</div>
           )}
         </ChartCard>
       </div>

@@ -56,3 +56,32 @@ export async function uploadVideo(formData) {
     body: formData,
   });
 }
+
+// Fetch historical analytics from the backend.
+export async function getAnalyticsHistory(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/analytics/history${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
+}
+
+export async function getAnalyticsToday(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/analytics/today${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
+}
+
+export async function getAnalyticsWeekly(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/analytics/weekly${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
+}
+
+export async function getAnalyticsMonthly(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/analytics/monthly${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
+}

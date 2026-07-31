@@ -5,7 +5,7 @@ import BackendStatus from "../components/BackendStatus";
 import SummaryPanel from "../components/SummaryPanel";
 import InsightsPanel from "../components/InsightsPanel";
 import ChartsPanel from "../components/ChartsPanel";
-import { getDashboard } from "../api/trafficApi";
+import { getDashboard, getAnalyticsToday, getAnalyticsWeekly, getAnalyticsMonthly } from "../api/trafficApi";
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return "Not available";
@@ -27,6 +27,9 @@ function Analytics() {
   const [error, setError] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [trendData, setTrendData] = useState([]);
+  const [selectedView, setSelectedView] = useState("live");
+  const [historicalSummary, setHistoricalSummary] = useState(null);
+  const [historicalCharts, setHistoricalCharts] = useState(null);
   const isMountedRef = useRef(false);
   const isFetchingRef = useRef(false);
   const hasInitialLoadRef = useRef(false);
@@ -46,6 +49,30 @@ function Analytics() {
           setLoading(true);
         }
         setError("");
+
+        if (selectedView !== "live") {
+          let response;
+          if (selectedView === "today") {
+            response = await getAnalyticsToday();
+          } else if (selectedView === "weekly") {
+            response = await getAnalyticsWeekly();
+          } else {
+            response = await getAnalyticsMonthly();
+          }
+
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          const payload = response?.summary ? response : null;
+          setHistoricalSummary(payload?.summary || null);
+          setHistoricalCharts(payload?.charts || null);
+          setDashboardData(null);
+          setRoads([]);
+          setTrendData([]);
+          setLoading(false);
+          return;
+        }
 
         const data = await getDashboard();
 
@@ -82,9 +109,11 @@ function Analytics() {
           return;
         }
 
-        setError("Unable to load analytics data.");
+        setError(err.message || "Unable to load analytics data.");
         setDashboardData(null);
         setRoads([]);
+        setHistoricalSummary(null);
+        setHistoricalCharts(null);
       } finally {
         if (isMountedRef.current && !hasInitialLoadRef.current) {
           setLoading(false);
@@ -93,19 +122,44 @@ function Analytics() {
       }
     };
 
-    fetchDashboardData(true);
+    if (selectedView === "live") {
+      fetchDashboardData(true);
 
-    const intervalId = window.setInterval(() => {
-      fetchDashboardData(false);
-    }, 1000);
+      const intervalId = window.setInterval(() => {
+        fetchDashboardData(false);
+      }, 1000);
+
+      return () => {
+        isMountedRef.current = false;
+        window.clearInterval(intervalId);
+      };
+    }
+
+    fetchDashboardData(true);
 
     return () => {
       isMountedRef.current = false;
-      window.clearInterval(intervalId);
     };
-  }, []);
+  }, [selectedView]);
 
   const metrics = useMemo(() => {
+    if (selectedView !== "live") {
+      const summary = historicalSummary || {};
+      return {
+        totalVehicles: summary.totalVehicles || 0,
+        averageVehicles: summary.averageVehicles?.toString() || "0.0",
+        activeRoad: summary.highestTrafficRoad || "None",
+        highestTrafficRoad: summary.highestTrafficRoad || "None",
+        leastBusyRoad: summary.leastBusyRoad || "None",
+        highestDensity: summary.highestDensity || "NONE",
+        currentTimer: 0,
+        roadCount: summary.records || 0,
+        systemStatus: error ? "OFFLINE" : "RUNNING",
+        lastUpdated: summary.lastUpdated ? formatTimestamp(summary.lastUpdated) : "Not available",
+        hasTraffic: (summary.totalVehicles || 0) > 0,
+      };
+    }
+
     const totalVehicles = roads.reduce((sum, road) => sum + (road.vehicleCount || 0), 0);
     const averageVehicles = roads.length ? (totalVehicles / roads.length).toFixed(1) : "0.0";
     const activeRoad = roads.find((road) => road.id === dashboardData?.current_green_road) || roads.find((road) => road.signal === "GREEN") || roads[0] || null;
@@ -142,7 +196,7 @@ function Analytics() {
       lastUpdated: latestTimestamp ? formatTimestamp(latestTimestamp) : "Not available",
       hasTraffic: roads.some((road) => (road.vehicleCount || 0) > 0),
     };
-  }, [roads, dashboardData, error]);
+  }, [roads, dashboardData, error, selectedView, historicalSummary]);
 
   return (
     <Layout>
@@ -167,18 +221,71 @@ function Analytics() {
         </button>
       </div>
 
-      {loading && <div className="text-center text-slate-300 mb-4">Loading analytics data...</div>}
-      {error && <div className="text-center text-danger mb-4">{error}</div>}
+      <div className="d-flex justify-content-center mb-4">
+        <div className="btn-group" role="group" aria-label="Analytics view selector">
+          {[
+            { value: "live", label: "Live" },
+            { value: "today", label: "Today" },
+            { value: "weekly", label: "Weekly" },
+            { value: "monthly", label: "Monthly" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`btn btn-sm ${selectedView === option.value ? "btn-light text-dark" : "btn-outline-light"}`}
+              onClick={() => setSelectedView(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && (
+        <div className="text-center text-slate-300 mb-4">
+          <div className="spinner-border spinner-border-sm text-light me-2" role="status" aria-hidden="true" />
+          Loading analytics data...
+        </div>
+      )}
+      {error && (
+        <div className="text-center text-danger mb-4">
+          {error}
+          <button type="button" className="btn btn-outline-light btn-sm ms-3" onClick={() => setSelectedView(selectedView)}>
+            Retry
+          </button>
+        </div>
+      )}
 
       <SummaryPanel metrics={metrics} status={metrics.systemStatus} lastUpdated={metrics.lastUpdated} />
       <InsightsPanel metrics={metrics} />
 
-      {metrics.hasTraffic ? (
-        <ChartsPanel roads={roads} trendData={trendData} hasTraffic={metrics.hasTraffic} />
+      {selectedView === "live" ? (
+        metrics.hasTraffic ? (
+          <ChartsPanel roads={roads} trendData={trendData} hasTraffic={metrics.hasTraffic} />
+        ) : (
+          <div className="card mb-4" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
+            <div className="card-body p-4 text-center text-slate-300">
+              No traffic data available
+            </div>
+          </div>
+        )
+      ) : historicalCharts ? (
+        <ChartsPanel
+          roads={historicalCharts.roadDistribution?.map((item) => ({
+            id: item.road,
+            name: item.road,
+            vehicleCount: item.vehicles,
+            densityLevel: "UNKNOWN",
+          })) || []}
+          trendData={historicalCharts.trafficTrend?.map((item) => ({ label: item.time, totalVehicles: item.vehicles })) || []}
+          densityData={historicalCharts.densityDistribution || []}
+          waitingTrend={historicalCharts.waitingTrend || []}
+          hasTraffic={(historicalSummary?.totalVehicles || 0) > 0}
+        />
       ) : (
         <div className="card mb-4" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
           <div className="card-body p-4 text-center text-slate-300">
-            No traffic data available
+            No historical traffic data available
           </div>
         </div>
       )}
