@@ -8,6 +8,7 @@ from shared_state import controller_state, controller_state_lock
 from worker import Worker
 from traffic_controller import TrafficController
 from database import get_database, get_database_name
+from analytics import get_history, get_today_summary, get_weekly_summary, get_monthly_summary
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -127,6 +128,58 @@ def dashboard():
 def health():
     """Health check endpoint"""
     return jsonify({"status": "Backend is running"}), 200
+
+
+@app.route("/analytics/history", methods=["GET"])
+def analytics_history():
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        records = get_history(start_date=start_date, end_date=end_date)
+        if not records:
+            return jsonify({"status": "error", "message": "No analytics records found"}), 404
+        return jsonify({"status": "success", "records": records}), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/analytics/today", methods=["GET"])
+def analytics_today():
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        result = get_today_summary(start_date=start_date, end_date=end_date)
+        if not result:
+            return jsonify({"status": "error", "message": "No analytics records found"}), 404
+        return jsonify(result), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/analytics/weekly", methods=["GET"])
+def analytics_weekly():
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        result = get_weekly_summary(start_date=start_date, end_date=end_date)
+        if not result:
+            return jsonify({"status": "error", "message": "No analytics records found"}), 404
+        return jsonify({"status": "success", "weekly": result}), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/analytics/monthly", methods=["GET"])
+def analytics_monthly():
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        result = get_monthly_summary(start_date=start_date, end_date=end_date)
+        if not result:
+            return jsonify({"status": "error", "message": "No analytics records found"}), 404
+        return jsonify({"status": "success", "monthly": result}), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 if __name__ == "__main__":
