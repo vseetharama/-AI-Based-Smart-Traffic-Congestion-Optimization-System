@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
+import base64
 import os
 import time
 from threading import Thread
@@ -9,6 +10,7 @@ from worker import Worker
 from traffic_controller import TrafficController
 from database import get_database, get_database_name
 from analytics import get_history, get_today_summary, get_weekly_summary, get_monthly_summary
+from reports import build_pdf_report, build_csv_report
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -178,6 +180,33 @@ def analytics_monthly():
         if not result:
             return jsonify({"status": "error", "message": "No analytics records found"}), 404
         return jsonify({"status": "success", "monthly": result}), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/reports/pdf", methods=["GET"])
+def export_pdf_report():
+    try:
+        range_name = request.args.get("range", "today")
+        pdf_content = build_pdf_report(range_name)
+        pdf_bytes = base64.b64decode(pdf_content)
+        headers = {
+            "Content-Disposition": f"attachment; filename=traffic-report-{range_name}.pdf"
+        }
+        return Response(pdf_bytes, mimetype="application/pdf", headers=headers), 200
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/reports/csv", methods=["GET"])
+def export_csv_report():
+    try:
+        range_name = request.args.get("range", "today")
+        csv_content = build_csv_report(range_name)
+        headers = {
+            "Content-Disposition": f"attachment; filename=traffic-report-{range_name}.csv"
+        }
+        return Response(csv_content, mimetype="text/csv", headers=headers), 200
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 

@@ -4,6 +4,8 @@ function InsightCard({ title, value, icon, subtitle, tone = "default" }) {
     success: { border: "rgba(74,222,128,0.18)", iconBg: "rgba(34,197,94,0.16)", iconColor: "#4ade80" },
     warning: { border: "rgba(250,204,21,0.18)", iconBg: "rgba(250,204,21,0.16)", iconColor: "#facc15" },
     danger: { border: "rgba(248,113,113,0.18)", iconBg: "rgba(248,113,113,0.16)", iconColor: "#f87171" },
+    primary: { border: "rgba(96,165,250,0.22)", iconBg: "rgba(59,130,246,0.20)", iconColor: "#93c5fd" },
+    secondary: { border: "rgba(167,139,250,0.22)", iconBg: "rgba(139,92,246,0.20)", iconColor: "#c4b5fd" },
   };
 
   const activeTone = tones[tone] || tones.default;

@@ -1,4 +1,5 @@
 import Layout from "../components/Layout";
+import AnimatedHeading from "../components/AnimatedHeading";
 
 export default function Members() {
   const team = [
@@ -14,9 +15,9 @@ export default function Members() {
       <div className="max-w-7xl mx-auto px-6 py-16">
         
         {/* HEADER */}
-        <h1 className="text-4xl font-bold text-center mb-3 bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
+        <AnimatedHeading hero as="h1" className="text-4xl font-bold text-center mb-3 bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
           Meet Our Team
-        </h1>
+        </AnimatedHeading>
         <p className="text-center text-gray-400 mb-16">
           Talented developers building the future of AI traffic control
         </p>

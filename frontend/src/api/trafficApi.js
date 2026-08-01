@@ -85,3 +85,27 @@ export async function getAnalyticsMonthly(params = {}) {
     method: "GET",
   });
 }
+
+export async function exportAnalyticsReport(format, range = "today") {
+  const response = await fetch(buildUrl(`/reports/${format}?range=${range}`), {
+    method: "GET",
+    headers: {
+      Accept: format === "pdf" ? "application/pdf" : "text/csv",
+    },
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Unable to export ${format.toUpperCase()} report.`);
+  }
+
+  const contentDisposition = response.headers.get("content-disposition") || "";
+  const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  const blob = await response.blob();
+
+  return {
+    blob,
+    filename: filenameMatch?.[1] || `traffic-report-${range}.${format}`,
+    contentType: response.headers.get("content-type") || (format === "pdf" ? "application/pdf" : "text/csv"),
+  };
+}

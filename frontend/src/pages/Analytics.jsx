@@ -5,7 +5,8 @@ import BackendStatus from "../components/BackendStatus";
 import SummaryPanel from "../components/SummaryPanel";
 import InsightsPanel from "../components/InsightsPanel";
 import ChartsPanel from "../components/ChartsPanel";
-import { getDashboard, getAnalyticsToday, getAnalyticsWeekly, getAnalyticsMonthly } from "../api/trafficApi";
+import InsightCard from "../components/InsightCard";
+import { getDashboard, getAnalyticsToday, getAnalyticsWeekly, getAnalyticsMonthly, exportAnalyticsReport } from "../api/trafficApi";
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return "Not available";
@@ -30,6 +31,8 @@ function Analytics() {
   const [selectedView, setSelectedView] = useState("live");
   const [historicalSummary, setHistoricalSummary] = useState(null);
   const [historicalCharts, setHistoricalCharts] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const isMountedRef = useRef(false);
   const isFetchingRef = useRef(false);
   const hasInitialLoadRef = useRef(false);
@@ -142,6 +145,34 @@ function Analytics() {
     };
   }, [selectedView]);
 
+  const handleExport = async (format) => {
+    if (selectedView === "live") {
+      setExportError("Export is available for historical views only.");
+      return;
+    }
+
+    try {
+      setExporting(true);
+      setExportError("");
+      const response = await exportAnalyticsReport(format, selectedView);
+
+      const mimeType = response.contentType || (format === "pdf" ? "application/pdf" : "text/csv;charset=utf-8");
+      const blob = response.blob instanceof Blob ? response.blob : new Blob([response.blob], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = response.filename || `traffic-report-${selectedView}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err.message || "Unable to export report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const metrics = useMemo(() => {
     if (selectedView !== "live") {
       const summary = historicalSummary || {};
@@ -198,48 +229,147 @@ function Analytics() {
     };
   }, [roads, dashboardData, error, selectedView, historicalSummary]);
 
+  const overviewCards = [
+    {
+      title: "System Status",
+      value: metrics.systemStatus || "RUNNING",
+      icon: "🟢",
+      subtitle: metrics.systemStatus === "RUNNING" ? "Live dashboard polling active" : "No fresh data received",
+      tone: "success",
+    },
+    {
+      title: "Current Active Road",
+      value: metrics.activeRoad || "None",
+      icon: "🛣️",
+      subtitle: metrics.activeRoad ? "Current green road from the dashboard" : "Waiting for live data",
+      tone: "primary",
+    },
+    {
+      title: "Current Signal Timer",
+      value: metrics.currentTimer ? `${metrics.currentTimer} sec` : "0 sec",
+      icon: "⏱️",
+      subtitle: "Live timer from the current signal cycle",
+      tone: "warning",
+    },
+    {
+      title: "Total Vehicles",
+      value: metrics.totalVehicles || "No traffic data available",
+      icon: "🚗",
+      subtitle: metrics.totalVehicles ? "Combined live vehicle count" : "All roads are idle",
+      tone: "success",
+    },
+    {
+      title: "Highest Density",
+      value: metrics.highestDensity || "NONE",
+      icon: "📈",
+      subtitle: metrics.highestDensity ? "Highest density detected among roads" : "No traffic detected",
+      tone: metrics.highestDensity === "HIGH" ? "danger" : "default",
+    },
+    {
+      title: "Last Updated",
+      value: metrics.lastUpdated || "Not available",
+      icon: "🕒",
+      subtitle: "Most recent dashboard timestamp",
+      tone: "secondary",
+    },
+  ];
+
+  const secondaryCards = [
+    {
+      title: "Average Vehicles",
+      value: metrics.averageVehicles || "0.0",
+      icon: "📊",
+      subtitle: "Average per monitored road",
+      tone: "primary",
+    },
+    {
+      title: "Highest Traffic Road",
+      value: metrics.highestTrafficRoad || "None",
+      icon: "🏁",
+      subtitle: "Road with the most vehicles",
+      tone: "warning",
+    },
+    {
+      title: "Least Busy Road",
+      value: metrics.leastBusyRoad || "None",
+      icon: "🌿",
+      subtitle: "Road with the fewest vehicles",
+      tone: "success",
+    },
+    {
+      title: "Roads Being Monitored",
+      value: metrics.roadCount || 0,
+      icon: "🧭",
+      subtitle: "Number of monitored roads",
+      tone: "secondary",
+    },
+  ];
+
+  const hasWaitingTrendData = (historicalCharts?.waitingTrend || []).length > 0;
+
   return (
     <Layout>
-      <div className="text-center mb-5">
+      <div className="text-center mb-4">
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white mb-2">
           Real-Time Traffic Analytics
         </h1>
-        <p className="text-slate-400 text-base md:text-lg max-w-2xl mx-auto">
-          Live insights derived from the existing dashboard polling response.
+        <p className="text-slate-400 text-base md:text-lg max-w-3xl mx-auto">
+          Real-time and historical traffic insights powered by YOLO vehicle detection and MongoDB analytics.
         </p>
       </div>
 
       <BackendStatus />
 
       <div className="d-flex justify-content-center mb-4">
-        <button
-          type="button"
-          onClick={() => navigate("/dashboard")}
-          className="btn btn-outline-light btn-sm px-3 py-2"
-        >
-          ← Back to Live Dashboard
-        </button>
-      </div>
-
-      <div className="d-flex justify-content-center mb-4">
-        <div className="btn-group" role="group" aria-label="Analytics view selector">
-          {[
-            { value: "live", label: "Live" },
-            { value: "today", label: "Today" },
-            { value: "weekly", label: "Weekly" },
-            { value: "monthly", label: "Monthly" },
-          ].map((option) => (
+        <div className="btn-group" role="group" aria-label="Analytics navigation">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="btn btn-outline-light btn-sm px-3 py-2"
+          >
+            ← Back to Live Dashboard
+          </button>
+          <div className="btn-group" role="group" aria-label="Analytics view selector">
+            {[
+              { value: "live", label: "Live" },
+              { value: "today", label: "Today" },
+              { value: "weekly", label: "Weekly" },
+              { value: "monthly", label: "Monthly" },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`btn btn-sm ${selectedView === option.value ? "btn-light text-dark" : "btn-outline-light"}`}
+                onClick={() => setSelectedView(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className="btn-group" role="group" aria-label="Analytics export actions">
             <button
-              key={option.value}
               type="button"
-              className={`btn btn-sm ${selectedView === option.value ? "btn-light text-dark" : "btn-outline-light"}`}
-              onClick={() => setSelectedView(option.value)}
+              className="btn btn-outline-light btn-sm px-3 py-2"
+              onClick={() => handleExport("pdf")}
+              disabled={exporting || selectedView === "live"}
             >
-              {option.label}
+              {exporting ? "Generating PDF..." : "Export PDF"}
             </button>
-          ))}
+            <button
+              type="button"
+              className="btn btn-outline-light btn-sm px-3 py-2"
+              onClick={() => handleExport("csv")}
+              disabled={exporting || selectedView === "live"}
+            >
+              {exporting ? "Generating CSV..." : "Export CSV"}
+            </button>
+          </div>
         </div>
       </div>
+
+      {exportError && (
+        <div className="text-center text-danger mb-4">{exportError}</div>
+      )}
 
       {loading && (
         <div className="text-center text-slate-300 mb-4">
@@ -256,63 +386,44 @@ function Analytics() {
         </div>
       )}
 
-      <SummaryPanel metrics={metrics} status={metrics.systemStatus} lastUpdated={metrics.lastUpdated} />
-      <InsightsPanel metrics={metrics} />
+      <div className="row g-3 mb-4">
+        {overviewCards.map((card) => (
+          <div key={card.title} className="col-12 col-md-6 col-xl-4">
+            <InsightCard {...card} />
+          </div>
+        ))}
+      </div>
 
-      {selectedView === "live" ? (
-        metrics.hasTraffic ? (
-          <ChartsPanel roads={roads} trendData={trendData} hasTraffic={metrics.hasTraffic} />
-        ) : (
-          <div className="card mb-4" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
-            <div className="card-body p-4 text-center text-slate-300">
-              No traffic data available
-            </div>
+      <div className="row g-3 mb-4">
+        {secondaryCards.map((card) => (
+          <div key={card.title} className="col-12 col-md-6 col-xl-3">
+            <InsightCard {...card} />
           </div>
-        )
-      ) : historicalCharts ? (
-        <ChartsPanel
-          roads={historicalCharts.roadDistribution?.map((item) => ({
-            id: item.road,
-            name: item.road,
-            vehicleCount: item.vehicles,
-            densityLevel: "UNKNOWN",
-          })) || []}
-          trendData={historicalCharts.trafficTrend?.map((item) => ({ label: item.time, totalVehicles: item.vehicles })) || []}
-          densityData={historicalCharts.densityDistribution || []}
-          waitingTrend={historicalCharts.waitingTrend || []}
-          hasTraffic={(historicalSummary?.totalVehicles || 0) > 0}
-        />
-      ) : (
-        <div className="card mb-4" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
-          <div className="card-body p-4 text-center text-slate-300">
-            No historical traffic data available
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
 
-      <div className="card mt-3" style={{ background: "rgba(10, 14, 24, 0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", boxShadow: "0 10px 30px rgba(2, 8, 23, 0.35)" }}>
-        <div className="card-body p-4">
-          <h4 className="mb-3 text-white fw-semibold">Future Analytics Modules</h4>
-          <div className="row g-3">
-            {[
-              "Historical Analytics",
-              "Daily Traffic",
-              "Weekly Traffic",
-              "Monthly Reports",
-              "Peak Traffic Hour",
-              "Average Waiting Time",
-              "Signal Change History",
-              "Traffic Reports",
-            ].map((item) => (
-              <div key={item} className="col-12 col-md-6 col-xl-4">
-                <div className="p-3 rounded-3 border border-white/10 bg-white/5 text-slate-300">
-                  {item}
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="row g-4">
+        <div className="col-12">
+          <ChartsPanel
+            roads={selectedView === "live" ? roads : (historicalCharts?.roadDistribution?.map((item) => ({
+              id: item.road,
+              name: item.road,
+              vehicleCount: item.vehicles,
+              densityLevel: "UNKNOWN",
+            })) || [])}
+            trendData={selectedView === "live" ? trendData : (historicalCharts?.trafficTrend?.map((item) => ({ label: item.time, totalVehicles: item.vehicles })) || [])}
+            densityData={selectedView === "live" ? null : (historicalCharts?.densityDistribution || [])}
+            waitingTrend={selectedView === "live" ? [] : (historicalCharts?.waitingTrend || [])}
+            hasTraffic={selectedView === "live" ? metrics.hasTraffic : (historicalSummary?.totalVehicles || 0) > 0}
+          />
         </div>
       </div>
+
+      {selectedView !== "live" && !hasWaitingTrendData && (
+        <div className="mt-3 text-center text-slate-400 small">
+          Waiting time analytics will appear once sufficient historical data is available.
+        </div>
+      )}
     </Layout>
   );
 }

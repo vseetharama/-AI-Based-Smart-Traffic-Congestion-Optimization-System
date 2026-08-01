@@ -3,12 +3,20 @@ import { BarChart, Bar, CartesianGrid, Cell, PieChart, Pie, ResponsiveContainer,
 import ChartCard from "./ChartCard";
 
 function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waitingTrend = [] }) {
+  const getDensityColor = (name) => {
+    const normalizedName = String(name || "").toUpperCase();
+    if (normalizedName === "LOW") return "#22C55E";
+    if (normalizedName === "MEDIUM") return "#FACC15";
+    if (normalizedName === "HIGH") return "#EF4444";
+    return "#60A5FA";
+  };
+
   const densityDistribution = useMemo(() => {
     if (densityData?.length) {
       return densityData.map((item) => ({
         name: item.name || item.label || "UNKNOWN",
         value: item.value || 0,
-        color: item.color || (item.name === "HIGH" ? "#f87171" : item.name === "MEDIUM" ? "#facc15" : "#38bdf8"),
+        color: getDensityColor(item.name || item.label),
       }));
     }
 
@@ -21,11 +29,19 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
     });
 
     return [
-      { name: "LOW", value: counts.LOW, color: "#38bdf8" },
-      { name: "MEDIUM", value: counts.MEDIUM, color: "#facc15" },
-      { name: "HIGH", value: counts.HIGH, color: "#f87171" },
+      { name: "LOW", value: counts.LOW, color: getDensityColor("LOW") },
+      { name: "MEDIUM", value: counts.MEDIUM, color: getDensityColor("MEDIUM") },
+      { name: "HIGH", value: counts.HIGH, color: getDensityColor("HIGH") },
     ];
   }, [roads, densityData]);
+
+  const totalDensityRoads = useMemo(() => {
+    return densityDistribution.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  }, [densityDistribution]);
+
+  const legendItems = useMemo(() => {
+    return densityDistribution.filter((item) => Number(item.value) > 0);
+  }, [densityDistribution]);
 
   const vehicleBars = useMemo(() => {
     return roads.map((road) => ({
@@ -63,17 +79,50 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
       <div className="col-12 col-xl-6">
         <ChartCard title="Traffic Density Distribution" subtitle="Current density mix across monitored roads">
           {hasTraffic ? (
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={densityDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} animationDuration={600} animationBegin={0}>
-                    {densityDistribution.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="d-flex flex-column align-items-center" style={{ width: "100%", minHeight: 320 }}>
+              <div style={{ width: "100%", height: 260 }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={densityDistribution}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      animationDuration={600}
+                      animationBegin={0}
+                      paddingAngle={2}
+                    >
+                      {densityDistribution.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name) => [`${value} roads`, name]}
+                      contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="d-flex flex-wrap justify-content-center gap-3 mt-2" style={{ width: "100%" }}>
+                {legendItems.length > 0 ? (
+                  legendItems.map((item) => {
+                    const percentage = totalDensityRoads > 0 ? Math.round((Number(item.value) / totalDensityRoads) * 100) : 0;
+                    return (
+                      <div key={item.name} className="d-flex align-items-center gap-2 text-slate-300 small">
+                        <span style={{ color: item.color, fontSize: "0.9rem" }}>●</span>
+                        <span className="fw-semibold text-white">{item.name}</span>
+                        <span>({item.value})</span>
+                        <span className="text-slate-400">{percentage}%</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-slate-400 small">No density data available</div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="text-center text-muted py-5">No traffic data available</div>
@@ -101,9 +150,9 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
         </ChartCard>
       </div>
 
-      <div className="col-12">
-        <ChartCard title="Waiting Time Trend" subtitle="Average waiting time across the selected period">
-          {waitingTrend.length > 0 ? (
+      {waitingTrend.length > 0 ? (
+        <div className="col-12">
+          <ChartCard title="Waiting Time Trend" subtitle="Average waiting time across the selected period">
             <div style={{ width: "100%", height: 280 }}>
               <ResponsiveContainer>
                 <LineChart data={waitingTrend} animationDuration={500}>
@@ -115,11 +164,9 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          ) : (
-            <div className="text-center text-muted py-5">No waiting trend data available</div>
-          )}
-        </ChartCard>
-      </div>
+          </ChartCard>
+        </div>
+      ) : null}
     </div>
   );
 }

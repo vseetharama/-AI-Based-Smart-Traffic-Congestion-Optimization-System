@@ -2,15 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
   background: #020617;
   color: white;
   font-family: system-ui;
 }
 
 #root {
+  width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -25,4 +37,130 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #4c1d95;
   border-radius: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.flow-card {
+  position: relative;
+  width: 100%;
+  min-height: 176px;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.95));
+  padding: 1rem;
+  box-shadow: 0 18px 45px rgba(2, 8, 23, 0.28);
+  backdrop-filter: blur(14px);
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+.flow-card.is-visible {
+  animation: flowCardIn 0.6s ease-out forwards;
+}
+
+.flow-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at top left, rgba(34, 211, 238, 0.14), transparent 55%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.flow-card.is-visible .flow-glow {
+  animation: flowGlowPulse 2.2s ease-in-out infinite 0.7s;
+}
+
+.flow-connector {
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: #67e8f9;
+  opacity: 0;
+}
+
+.flow-connector.is-visible {
+  animation: flowConnectorIn 0.6s ease-out forwards;
+}
+
+.flow-connector-line {
+  height: 2px;
+  width: 1.5rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.2), rgba(34, 211, 238, 0.95));
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.25);
+  animation: flowLineMove 1.6s ease-in-out infinite;
+}
+
+.flow-connector-line.vertical {
+  height: 1.5rem;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.2), rgba(34, 211, 238, 0.95));
+}
+
+.flow-connector-icon {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+@keyframes flowCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flowGlowPulse {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes flowConnectorIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes flowLineMove {
+  0%,
+  100% {
+    transform: scaleX(0.85);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scaleX(1.05);
+    opacity: 1;
+  }
 }

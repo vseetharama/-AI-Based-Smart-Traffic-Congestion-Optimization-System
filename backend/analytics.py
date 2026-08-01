@@ -36,11 +36,58 @@ def _build_date_filter(start_date: Optional[str], end_date: Optional[str]):
     return {}
 
 
+def _is_complete_record(record) -> bool:
+    required_fields = [
+        "timestamp",
+        "road_name",
+        "vehicle_count",
+        "density_level",
+        "signal_status",
+        "waiting_time",
+        "recommended_green_time",
+        "prediction",
+    ]
+    for field in required_fields:
+        value = record.get(field)
+        if value is None:
+            return False
+        if isinstance(value, str) and not value.strip():
+            return False
+    return True
+
+
+def _is_idle_record(record) -> bool:
+    vehicle_count = record.get("vehicle_count")
+    prediction = str(record.get("prediction") or "").strip().lower()
+    density_level = str(record.get("density_level") or "").strip().upper()
+    return vehicle_count == 0 and prediction in {"no video", "no_video", "unknown", ""} and density_level == "LOW"
+
+
+def _filter_meaningful_records(records, include_idle: bool = False):
+    meaningful_records = []
+    for record in records or []:
+        if not _is_complete_record(record):
+            continue
+        if not include_idle and _is_idle_record(record):
+            continue
+        meaningful_records.append(record)
+    return meaningful_records
+
+
+def _get_monitored_road_count(records):
+    roads = {
+        record.get("road_name") or f"Road {record.get('road_id', '')}"
+        for record in records or []
+    }
+    return len(roads)
+
+
 def get_history(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
     query = _build_date_filter(start_date, end_date)
     cursor = collection.find(query).sort("timestamp", 1)
-    return list(cursor)
+    records = list(cursor)
+    return _filter_meaningful_records(records)
 
 
 def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
@@ -72,6 +119,7 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
 
     summary = result[0]
     records = list(collection.find(query).sort("timestamp", 1))
+    records = _filter_meaningful_records(records)
     if not records:
         return {"status": "error", "message": "No analytics records found"}
 
@@ -83,18 +131,22 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
     traffic_trend = _get_traffic_trend(records)
     waiting_trend = _get_waiting_trend(records)
 
+    monitored_road_count = _get_monitored_road_count(records)
+    total_vehicles = int(sum(int(record.get("vehicle_count", 0) or 0) for record in records))
+    average_vehicles = round(float(total_vehicles / monitored_road_count), 2) if monitored_road_count else 0
+
     return {
         "status": "success",
         "summary": {
-            "totalVehicles": int(summary.get("totalVehicles", 0) or 0),
-            "averageVehicles": round(float(summary.get("averageVehicles", 0) or 0), 2),
+            "totalVehicles": total_vehicles,
+            "averageVehicles": average_vehicles,
             "peakTrafficHour": peak_hour,
             "highestTrafficRoad": highest_traffic_road,
             "leastBusyRoad": least_busy_road,
             "averageWaitingTime": round(float(summary.get("averageWaitingTime", 0) or 0), 2),
             "highestDensity": _get_highest_density(records),
-            "roadCount": len(road_distribution),
-            "records": int(summary.get("records", 0) or 0),
+            "roadCount": monitored_road_count,
+            "records": len(records),
             "lastUpdated": summary.get("lastUpdated").isoformat() if summary.get("lastUpdated") else None,
         },
         "charts": {
@@ -140,16 +192,20 @@ def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str]
         for item in weekly_groups
     ]
 
+    monitored_road_count = _get_monitored_road_count(records)
+    total_vehicles = int(sum(int(item.get("totalVehicles", 0) or 0) for item in weekly_groups))
+    average_vehicles = round(float(total_vehicles / monitored_road_count), 2) if monitored_road_count else 0
+
     summary = {
-        "totalVehicles": int(sum(item.get("totalVehicles", 0) or 0 for item in weekly_groups)),
-        "averageVehicles": round(float(sum(item.get("averageVehicles", 0) or 0 for item in weekly_groups)) / len(weekly_groups), 2) if weekly_groups else 0,
+        "totalVehicles": total_vehicles,
+        "averageVehicles": average_vehicles,
         "peakTrafficHour": "N/A",
         "highestTrafficRoad": _get_highest_traffic_road(records),
         "leastBusyRoad": _get_least_busy_road(records),
         "averageWaitingTime": round(float(sum(item.get("averageWaitingTime", 0) or 0 for item in weekly_groups)) / len(weekly_groups), 2) if weekly_groups else 0,
         "highestDensity": _get_highest_density(records),
-        "roadCount": len(road_distribution),
-        "records": int(sum(item.get("records", 0) or 0 for item in weekly_groups)),
+        "roadCount": monitored_road_count,
+        "records": len(records),
         "lastUpdated": records[-1].get("timestamp").isoformat() if records else None,
     }
 
@@ -199,16 +255,20 @@ def get_monthly_summary(start_date: Optional[str] = None, end_date: Optional[str
         for item in monthly_groups
     ]
 
+    monitored_road_count = _get_monitored_road_count(records)
+    total_vehicles = int(sum(int(item.get("totalVehicles", 0) or 0) for item in monthly_groups))
+    average_vehicles = round(float(total_vehicles / monitored_road_count), 2) if monitored_road_count else 0
+
     summary = {
-        "totalVehicles": int(sum(item.get("totalVehicles", 0) or 0 for item in monthly_groups)),
-        "averageVehicles": round(float(sum(item.get("averageVehicles", 0) or 0 for item in monthly_groups)) / len(monthly_groups), 2) if monthly_groups else 0,
+        "totalVehicles": total_vehicles,
+        "averageVehicles": average_vehicles,
         "peakTrafficHour": "N/A",
         "highestTrafficRoad": _get_highest_traffic_road(records),
         "leastBusyRoad": _get_least_busy_road(records),
         "averageWaitingTime": round(float(sum(item.get("averageWaitingTime", 0) or 0 for item in monthly_groups)) / len(monthly_groups), 2) if monthly_groups else 0,
         "highestDensity": _get_highest_density(records),
-        "roadCount": len(road_distribution),
-        "records": int(sum(item.get("records", 0) or 0 for item in monthly_groups)),
+        "roadCount": monitored_road_count,
+        "records": len(records),
         "lastUpdated": records[-1].get("timestamp").isoformat() if records else None,
     }
 
