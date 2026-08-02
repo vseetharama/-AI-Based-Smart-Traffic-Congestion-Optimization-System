@@ -166,7 +166,7 @@ def analytics_weekly():
         result = get_weekly_summary(start_date=start_date, end_date=end_date)
         if not result:
             return jsonify({"status": "error", "message": "No analytics records found"}), 404
-        return jsonify({"status": "success", "weekly": result}), 200
+        return jsonify(result), 200
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 
@@ -179,7 +179,7 @@ def analytics_monthly():
         result = get_monthly_summary(start_date=start_date, end_date=end_date)
         if not result:
             return jsonify({"status": "error", "message": "No analytics records found"}), 404
-        return jsonify({"status": "success", "monthly": result}), 200
+        return jsonify(result), 200
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 

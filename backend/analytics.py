@@ -12,6 +12,13 @@ def _get_collection():
     return db[COLLECTION_NAME]
 
 
+def _ensure_timestamp_index(collection):
+    try:
+        collection.create_index([("timestamp", 1)], name="timestamp_asc", background=True)
+    except Exception:
+        pass
+
+
 def _parse_date(value: Optional[str]):
     if not value:
         return None
@@ -21,17 +28,20 @@ def _parse_date(value: Optional[str]):
         return None
 
 
-def _build_date_filter(start_date: Optional[str], end_date: Optional[str]):
+def _build_date_filter(start_date: Optional[str], end_date: Optional[str], default_delta=None):
     query = {}
     start_dt = _parse_date(start_date)
     end_dt = _parse_date(end_date)
 
     if start_dt is not None:
         query["$gte"] = start_dt
+    elif default_delta is not None:
+        query["$gte"] = datetime.now(timezone.utc) - default_delta
+
     if end_dt is not None:
         query["$lte"] = end_dt
 
-    if start_dt is not None or end_dt is not None:
+    if start_dt is not None or end_dt is not None or default_delta is not None:
         return {"timestamp": query}
     return {}
 
@@ -84,15 +94,17 @@ def _get_monitored_road_count(records):
 
 def get_history(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
-    query = _build_date_filter(start_date, end_date)
-    cursor = collection.find(query).sort("timestamp", 1)
+    _ensure_timestamp_index(collection)
+    query = _build_date_filter(start_date, end_date, default_delta=timedelta(days=30))
+    cursor = collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000)
     records = list(cursor)
     return _filter_meaningful_records(records)
 
 
 def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
-    query = _build_date_filter(start_date, end_date)
+    _ensure_timestamp_index(collection)
+    query = _build_date_filter(start_date, end_date, default_delta=timedelta(hours=24))
 
     if not query:
         now = datetime.now(timezone.utc)
@@ -113,12 +125,12 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
         }},
     ]
 
-    result = list(collection.aggregate(pipeline))
+    result = list(collection.aggregate(pipeline, allowDiskUse=True))
     if not result:
         return {"status": "error", "message": "No analytics records found"}
 
     summary = result[0]
-    records = list(collection.find(query).sort("timestamp", 1))
+    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
     records = _filter_meaningful_records(records)
     if not records:
         return {"status": "error", "message": "No analytics records found"}
@@ -160,7 +172,8 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
 
 def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
-    query = _build_date_filter(start_date, end_date)
+    _ensure_timestamp_index(collection)
+    query = _build_date_filter(start_date, end_date, default_delta=timedelta(days=7))
     pipeline = [
         {"$match": query},
         {"$group": {
@@ -176,11 +189,11 @@ def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str]
         {"$sort": {"_id.year": 1, "_id.week": 1}},
     ]
 
-    weekly_groups = list(collection.aggregate(pipeline))
+    weekly_groups = list(collection.aggregate(pipeline, allowDiskUse=True))
     if not weekly_groups:
         return {"status": "error", "message": "No analytics records found"}
 
-    records = list(collection.find(query).sort("timestamp", 1))
+    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
     road_distribution = _get_road_distribution(records)
     density_distribution = _get_density_distribution(records)
     traffic_trend = [
@@ -223,7 +236,8 @@ def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str]
 
 def get_monthly_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
-    query = _build_date_filter(start_date, end_date)
+    _ensure_timestamp_index(collection)
+    query = _build_date_filter(start_date, end_date, default_delta=timedelta(days=30))
     pipeline = [
         {"$match": query},
         {"$group": {
@@ -239,11 +253,11 @@ def get_monthly_summary(start_date: Optional[str] = None, end_date: Optional[str
         {"$sort": {"_id.year": 1, "_id.month": 1}},
     ]
 
-    monthly_groups = list(collection.aggregate(pipeline))
+    monthly_groups = list(collection.aggregate(pipeline, allowDiskUse=True))
     if not monthly_groups:
         return {"status": "error", "message": "No analytics records found"}
 
-    records = list(collection.find(query).sort("timestamp", 1))
+    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
     road_distribution = _get_road_distribution(records)
     density_distribution = _get_density_distribution(records)
     traffic_trend = [
