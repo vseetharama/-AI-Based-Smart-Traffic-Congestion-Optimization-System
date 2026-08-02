@@ -1,6 +1,6 @@
 // Upload.jsx → VIDEO INPUT PAGE
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import UploadBox from "../components/UploadBox";
@@ -31,8 +31,10 @@ function validateFile(file) {
 
 function Upload() {
   const [videos, setVideos] = useState({});
-  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processingState, setProcessingState] = useState("idle");
   const [status, setStatus] = useState(null);
+  const processingRef = useRef(false);
   const navigate = useNavigate();
 
   const handleDrop = (e, road) => {
@@ -72,6 +74,10 @@ function Upload() {
   };
 
   const handleUpload = async () => {
+    if (processingRef.current) {
+      return;
+    }
+
     const selectedVideos = Object.entries(videos).filter(([, file]) => file);
 
     if (selectedVideos.length === 0) {
@@ -85,11 +91,14 @@ function Upload() {
       return;
     }
 
+    processingRef.current = true;
+    setProcessing(true);
+    setProcessingState("processing");
+
     try {
-      setUploading(true);
       setStatus({
         type: "info",
-        title: "Uploading videos",
+        title: "Processing videos",
         message: "Your files are being processed. This may take a moment.",
       });
 
@@ -104,6 +113,7 @@ function Upload() {
         title: "Upload successful",
         message: "The traffic videos were processed successfully. You can review the live dashboard now.",
       });
+      setProcessingState("success");
     } catch (error) {
       console.error("Upload error:", error);
       setStatus({
@@ -111,8 +121,10 @@ function Upload() {
         title: "Upload failed",
         message: error.message || "The upload could not be completed. Please try again.",
       });
+      setProcessingState("error");
     } finally {
-      setUploading(false);
+      processingRef.current = false;
+      setProcessing(false);
     }
   };
 
@@ -148,27 +160,43 @@ function Upload() {
         <div className="mt-12 flex flex-wrap justify-center gap-3">
           <button
             onClick={handleUpload}
-            disabled={uploading}
-            className="px-8 py-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg shadow-purple-500/40 hover:scale-105 hover:shadow-purple-500/60 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={processing}
+            className="px-8 py-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg shadow-purple-500/40 hover:scale-105 hover:shadow-purple-500/60 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
-            {uploading ? "Uploading..." : "Process Traffic Data"}
+            {processing ? (
+              <>
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              "Process Traffic Data"
+            )}
           </button>
 
-          {status?.type === "success" && (
-            <button
-              className="px-8 py-3 rounded-full border border-white/15 bg-white/5 text-white font-semibold transition hover:bg-white/10"
-            >
-              View Live Dashboard
-            </button>
-          )}
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="px-8 py-3 rounded-full border border-white/15 bg-white/5 text-white font-semibold transition hover:bg-white/10"
+          >
+            View Live Dashboard
+          </button>
 
-          {status?.type === "success" && (
-            <button
-              onClick={() => navigate("/analytics")}
-              className="px-8 py-3 rounded-full border border-white/15 bg-white/5 text-white font-semibold transition hover:bg-white/10"
-            >
-              View Analytics
-            </button>
+          <button
+            onClick={() => navigate("/analytics")}
+            className="px-8 py-3 rounded-full border border-white/15 bg-white/5 text-white font-semibold transition hover:bg-white/10"
+          >
+            View Analytics
+          </button>
+        </div>
+
+        <div className="mt-4 min-h-6 text-sm font-medium">
+          {processingState === "processing" && (
+            <p className="text-amber-400">🟡 Processing uploaded videos... Please wait.</p>
+          )}
+          {processingState === "success" && (
+            <p className="text-emerald-400">🟢 Traffic processing completed successfully.</p>
+          )}
+          {processingState === "error" && (
+            <p className="text-rose-400">🔴 Processing failed. Please try again.</p>
           )}
         </div>
       </div>
