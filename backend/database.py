@@ -11,6 +11,8 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 DATABASE_NAME = os.getenv("DATABASE_NAME", "traffic_system").strip()
+MONGODB_TLS = os.getenv("MONGODB_TLS", "true").strip().lower() not in {"false", "0", "no"}
+MONGODB_TLS_ALLOW_INVALID_CERTS = os.getenv("MONGODB_TLS_ALLOW_INVALID_CERTS", "true").strip().lower() not in {"false", "0", "no"}
 
 _client: Optional[MongoClient] = None
 _database = None
@@ -27,7 +29,13 @@ def get_database():
         raise ValueError("MONGODB_URI is not configured. Please set it in the backend .env file.")
 
     try:
-        _client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 5000,
+            "tls": MONGODB_TLS,
+        }
+        if MONGODB_TLS_ALLOW_INVALID_CERTS:
+            client_kwargs["tlsAllowInvalidCertificates"] = True
+        _client = MongoClient(MONGODB_URI, **client_kwargs)
         _database = _client[DATABASE_NAME]
         _client.admin.command("ping")
         print(f"MongoDB Connected Successfully")

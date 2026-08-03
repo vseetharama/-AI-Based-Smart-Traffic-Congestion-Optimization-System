@@ -77,3 +77,7 @@ Thumbs.db
 # Local Files
 # =====================================
 *.local
+.venv312/
+# Trained AI Models
+backend/models/*.keras
+backend/models/*.pkl

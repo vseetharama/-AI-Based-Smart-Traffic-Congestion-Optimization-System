@@ -21,7 +21,7 @@ Completed Features
 
 Pending
 
-- React Frontend
+- React Frontend (completed )
 - LSTM Prediction
 - Hybrid Decision Engine
 - Emergency Vehicle Priority
