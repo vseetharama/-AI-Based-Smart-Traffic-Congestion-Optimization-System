@@ -23,7 +23,7 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB max file size
+app.config["MAX_CONTENT_LENGTH"] =  2 * 1024 * 1024 * 1024 # 2gb max file size
 
 # Create worker instances and controller
 workers = {}
