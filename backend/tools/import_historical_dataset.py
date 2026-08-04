@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from pymongo import ReplaceOne
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
@@ -79,20 +81,44 @@ def load_csv_rows(csv_path: str | Path) -> list[dict[str, Any]]:
 
 
 def import_historical_dataset(csv_path: str | Path, collection_name: str = "traffic_logs") -> dict[str, Any]:
-    """Import historical records into MongoDB while skipping duplicates."""
+    """Import historical records into MongoDB while skipping duplicates.
+
+    Purpose:
+    Load the generated traffic rows into the existing traffic_logs collection in a
+    way that is reliable for large CSVs without changing the live schema.
+
+    Inputs:
+    csv_path : path to the generated historical traffic CSV.
+    collection_name : MongoDB collection that should receive the rows.
+
+    Outputs:
+    A summary showing how many rows were inserted or skipped.
+    """
     rows = load_csv_rows(csv_path)
     db = get_database()
     collection = db[collection_name]
 
+    try:
+        collection.create_index([("timestamp", 1), ("road_id", 1)], name="timestamp_road_id_idx")
+    except Exception:
+        pass
+
     inserted = 0
     skipped = 0
-    for row in rows:
-        existing = collection.find_one({"timestamp": row["timestamp"], "road_id": row["road_id"]})
-        if existing is not None:
-            skipped += 1
-            continue
-        collection.insert_one(row)
-        inserted += 1
+    batch_size = 1000
+    for start in range(0, len(rows), batch_size):
+        batch = rows[start:start + batch_size]
+        operations = [
+            ReplaceOne(
+                {"timestamp": row["timestamp"], "road_id": row["road_id"]},
+                row,
+                upsert=True,
+            )
+            for row in batch
+        ]
+        result = collection.bulk_write(operations, ordered=False)
+        inserted += int(result.upserted_count or 0)
+        skipped += int(result.matched_count or 0)
 
     return {
         "inserted": inserted,

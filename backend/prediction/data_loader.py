@@ -31,16 +31,21 @@ except ModuleNotFoundError:
     from database import get_database
 
 
-def load_traffic_history(collection_name: str = "traffic_logs") -> pd.DataFrame:
+def load_traffic_history(
+    collection_name: str = "traffic_logs",
+    limit: Optional[int] = None,
+    projection: Optional[dict[str, int]] = None,
+) -> pd.DataFrame:
     """Load traffic history from MongoDB as a pandas DataFrame.
 
     Purpose:
-    Retrieve the existing traffic_logs data without creating any new database or
-    collection. The records are converted into a DataFrame and sorted by
-    timestamp so that forecasting can be done in chronological order.
+    Retrieve traffic history records from MongoDB. When a limit is supplied,
+    only the requested sample is fetched instead of loading the whole collection.
 
     Parameters:
     collection_name : name of the MongoDB collection to read.
+    limit : optional maximum number of records to return.
+    projection : optional MongoDB projection to limit fields.
 
     Returns:
     A pandas DataFrame containing the traffic history.
@@ -48,7 +53,10 @@ def load_traffic_history(collection_name: str = "traffic_logs") -> pd.DataFrame:
     try:
         db = get_database()
         collection = db[collection_name]
-        documents = list(collection.find({}, {"_id": 0}).sort("timestamp", 1))
+        query = collection.find({}, projection or {"_id": 0}).sort("timestamp", 1)
+        if limit is not None:
+            query = query.limit(limit)
+        documents = list(query)
     except Exception:
         return pd.DataFrame(columns=[
             "timestamp",
@@ -79,6 +87,15 @@ def load_traffic_history(collection_name: str = "traffic_logs") -> pd.DataFrame:
         df = df.sort_values("timestamp").reset_index(drop=True)
 
     return df
+
+
+def load_traffic_sample(
+    collection_name: str = "traffic_logs",
+    limit: int = 10,
+    projection: Optional[dict[str, int]] = None,
+) -> pd.DataFrame:
+    """Load a small sample of traffic history without reading the full collection."""
+    return load_traffic_history(collection_name=collection_name, limit=limit, projection=projection)
 
 
 def group_by_road(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
