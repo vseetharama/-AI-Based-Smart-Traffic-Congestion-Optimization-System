@@ -20,18 +20,68 @@ class TrafficController:
         self._lock = threading.Lock()
         self._traffic_logger = TrafficLogger()
 
-    def _select_green_road(self, snapshot):
+    def _hybrid_score(self, data):
+        """Hybrid Decision Engine.
+
+        Combines current traffic and predicted traffic into a single score.
+        Current traffic is weighted higher (60%) because it reflects the
+        present road state and avoids overreacting to uncertain forecasts.
+        Predicted traffic is weighted lower (40%) to incorporate future trends
+        while keeping the controller stable and responsive.
+        """
+        current = data.get("vehicle_count", 0) or 0
+        status = (data.get("prediction_status") or "").lower()
+
+        if status != "success":
+            # If prediction is unavailable or failed, ignore predicted traffic.
+            return float(current)
+
+        predicted = data.get("predicted_vehicle_count", 0) or 0
+        return float(round(current * 0.6 + predicted * 0.4, 3))
+
+    def _select_green_road(self, snapshot, exclude_road=None):
         candidates = []
 
         for road_id, data in snapshot.items():
-            recommended_time = data.get("recommended_green_time", 0) or 0
-            vehicle_count = data.get("vehicle_count", 0) or 0
-            candidates.append((recommended_time, vehicle_count, road_id))
+            if exclude_road and road_id == exclude_road:
+                continue
+            hybrid_score = self._hybrid_score(data)
+            candidates.append((hybrid_score, road_id))
 
-        best = max(candidates, key=lambda item: (item[0], item[1], -int(item[2].replace("road", ""))))
-        return best[2]
+        # Choose the RED road with the highest Hybrid Score when switching.
+        # This prevents the currently GREEN road from immediately regaining
+        # green unless it genuinely has the highest priority after it becomes RED.
+        best = max(candidates, key=lambda item: (item[0], -int(item[1].replace("road", ""))))
+        return best[1]
 
     def _compute_waiting_time(self, snapshot, current_green_road, current_timer, target_road_id):
+        if not current_green_road:
+            return 0
+
+        if target_road_id == current_green_road:
+            return 0
+
+        waiting_time = max(int(current_timer or 0), 0)
+        current_road = current_green_road
+        seen_roads = set()
+
+        while True:
+            if current_road in seen_roads:
+                break
+            seen_roads.add(current_road)
+
+            next_road = self._select_green_road(snapshot, exclude_road=current_road)
+            if next_road == target_road_id:
+                return waiting_time
+
+            if next_road == current_road:
+                break
+
+            next_time = snapshot.get(next_road, {}).get("recommended_green_time", 0) or 0
+            waiting_time += max(int(next_time), 0)
+            current_road = next_road
+
+        return waiting_time
         if not current_green_road:
             return 0
 
@@ -73,6 +123,8 @@ class TrafficController:
 
             summaries[road_id] = {
                 "vehicle_count": vehicle_count,
+                "predicted_vehicle_count": data.get("predicted_vehicle_count", 0),
+                "prediction_status": data.get("prediction_status", "pending"),
                 "density_score": data.get("density_score", 0.0),
                 "density_level": "LOW" if not has_video else (data.get("density_level", "LOW") or "LOW"),
                 "prediction": prediction,

@@ -49,9 +49,10 @@ function Dashboard() {
             remainingTime: data?.current_green_road === roadId ? data?.current_timer ?? 0 : 0,
             waitingTime: data?.current_green_road === roadId ? 0 : summary?.waiting_time ?? 0,
             vehicleCount: summary?.vehicle_count ?? 0,
+            predictedVehicleCount: summary?.predicted_vehicle_count ?? 0,
+            predictionStatus: summary?.prediction_status || "unknown",
             densityLevel: summary?.density_level || "UNKNOWN",
             densityScore: summary?.density_score ?? 0,
-            prediction: summary?.prediction || "unknown",
             recommendedGreenTime: summary?.recommended_green_time ?? 0,
             lastUpdated: summary?.last_updated || null,
           }));

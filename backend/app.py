@@ -5,7 +5,12 @@ import os
 import time
 from threading import Thread
 from werkzeug.utils import secure_filename
-from shared_state import controller_state, controller_state_lock
+from shared_state import (
+    controller_state,
+    controller_state_lock,
+    road_results,
+    road_results_lock,
+)
 from worker import Worker
 from traffic_controller import TrafficController
 from database import get_database, get_database_name
@@ -113,11 +118,21 @@ def upload_files():
 
 @app.route("/dashboard", methods=["GET"])
 def dashboard():
-    with controller_state_lock:
-        road_summaries = {
-            road_id: summary.copy()
-            for road_id, summary in controller_state.get("road_summaries", {}).items()
+    with road_results_lock:
+        latest_predictions = {
+            road_id: data.copy()
+            for road_id, data in road_results.items()
         }
+
+    with controller_state_lock:
+        road_summaries = {}
+        for road_id, summary in controller_state.get("road_summaries", {}).items():
+            enriched_summary = summary.copy()
+            prediction_data = latest_predictions.get(road_id, {})
+            enriched_summary["predicted_vehicle_count"] = prediction_data.get("predicted_vehicle_count", 0)
+            enriched_summary["prediction_status"] = prediction_data.get("prediction_status", "failure")
+            road_summaries[road_id] = enriched_summary
+
         response = {
             "current_green_road": controller_state.get("current_green_road"),
             "current_timer": controller_state.get("current_timer"),
