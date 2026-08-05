@@ -1,8 +1,11 @@
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from yolotest import detect_vehicles, load_yolo_model
 from shared_state import road_results, road_results_lock, yolo_inference_lock
 
@@ -67,7 +70,8 @@ class Worker:
         return GREEN_TIME.get(level, GREEN_TIME["LOW"])
 
     def _update_road_results(self, vehicle_count, density, prediction, recommended_green_time):
-        timestamp = datetime.now().isoformat()
+        # store last_updated as timezone-aware UTC datetime
+        timestamp = datetime.now(timezone.utc)
         density_level = self._density_level(density)
         with road_results_lock:
             road_results[self.road_id].update({

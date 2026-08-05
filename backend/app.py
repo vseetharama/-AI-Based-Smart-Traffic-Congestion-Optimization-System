@@ -10,6 +10,7 @@ from worker import Worker
 from traffic_controller import TrafficController
 from database import get_database, get_database_name
 from analytics import get_history, get_today_summary, get_weekly_summary, get_monthly_summary
+from analytics import format_timestamp_for_display
 from reports import build_pdf_report, build_csv_report
 
 # Initialize Flask app
@@ -140,7 +141,14 @@ def analytics_history():
         records = get_history(start_date=start_date, end_date=end_date)
         if not records:
             return jsonify({"status": "error", "message": "No analytics records found"}), 404
-        return jsonify({"status": "success", "records": records}), 200
+        # Convert timestamps to Asia/Kolkata formatted strings for consistent frontend display
+        formatted = []
+        for r in records:
+            rec = r.copy()
+            rec_timestamp = rec.get("timestamp")
+            rec["timestamp"] = format_timestamp_for_display(rec_timestamp) if rec_timestamp else None
+            formatted.append(rec)
+        return jsonify({"status": "success", "records": formatted}), 200
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 

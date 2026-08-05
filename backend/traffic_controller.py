@@ -1,6 +1,6 @@
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from shared_state import (
     road_results,
@@ -85,7 +85,8 @@ class TrafficController:
         return summaries
 
     def _update_controller_state(self, current_green_road, current_timer, snapshot):
-        timestamp = datetime.now().isoformat()
+        # store controller timestamps as timezone-aware UTC ISO strings
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         processed_snapshot = {}
         for road_id, data in snapshot.items():

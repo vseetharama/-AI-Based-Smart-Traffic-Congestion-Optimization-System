@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 from database import get_database
@@ -66,6 +67,30 @@ def _is_complete_record(record) -> bool:
     return True
 
 
+def format_timestamp_for_display(value):
+    """Convert a datetime or ISO string (assumed UTC) to Asia/Kolkata formatted string DD-MM-YYYY hh:mm:ss AM/PM."""
+    if value is None:
+        return None
+    kolkata = ZoneInfo("Asia/Kolkata")
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, str):
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        else:
+            return str(value)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local_dt = dt.astimezone(kolkata)
+        return local_dt.strftime("%d-%m-%Y %I:%M:%S %p")
+    except Exception:
+        try:
+            return str(value)
+        except Exception:
+            return None
+
+
 def _is_idle_record(record) -> bool:
     vehicle_count = record.get("vehicle_count")
     prediction = str(record.get("prediction") or "").strip().lower()
@@ -92,24 +117,34 @@ def _get_monitored_road_count(records):
     return len(roads)
 
 
-def get_history(start_date: Optional[str] = None, end_date: Optional[str] = None):
+def get_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_idle: bool = False,
+    limit: Optional[int] = 2000,
+    default_delta: Optional[timedelta] = timedelta(days=30),
+):
     collection = _get_collection()
     _ensure_timestamp_index(collection)
-    query = _build_date_filter(start_date, end_date, default_delta=timedelta(days=30))
-    cursor = collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000)
+    query = _build_date_filter(start_date, end_date, default_delta=default_delta)
+    cursor = collection.find(query).sort("timestamp", 1).hint("timestamp_asc")
+    if limit is not None:
+        cursor = cursor.limit(limit)
     records = list(cursor)
+    if include_idle:
+        return records
     return _filter_meaningful_records(records)
 
 
 def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
     collection = _get_collection()
     _ensure_timestamp_index(collection)
+    now = datetime.now(timezone.utc)
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
     query = _build_date_filter(start_date, end_date, default_delta=timedelta(hours=24))
 
-    if not query:
-        now = datetime.now(timezone.utc)
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_day = start_of_day + timedelta(days=1)
+    if start_date is None and end_date is None:
         query = {"timestamp": {"$gte": start_of_day, "$lt": end_of_day}}
 
     pipeline = [
@@ -130,8 +165,10 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
         return {"status": "error", "message": "No analytics records found"}
 
     summary = result[0]
-    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
-    records = _filter_meaningful_records(records)
+    if start_date is None and end_date is None:
+        records = get_history(start_date=start_of_day.isoformat(), end_date=end_of_day.isoformat(), include_idle=False, limit=None)
+    else:
+        records = get_history(start_date=start_date, end_date=end_date, include_idle=False, limit=None)
     if not records:
         return {"status": "error", "message": "No analytics records found"}
 
@@ -159,7 +196,7 @@ def get_today_summary(start_date: Optional[str] = None, end_date: Optional[str] 
             "highestDensity": _get_highest_density(records),
             "roadCount": monitored_road_count,
             "records": len(records),
-            "lastUpdated": summary.get("lastUpdated").isoformat() if summary.get("lastUpdated") else None,
+            "lastUpdated": format_timestamp_for_display(summary.get("lastUpdated")) if summary.get("lastUpdated") else None,
         },
         "charts": {
             "roadDistribution": road_distribution,
@@ -193,20 +230,33 @@ def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str]
     if not weekly_groups:
         return {"status": "error", "message": "No analytics records found"}
 
-    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
+    records = get_history(start_date=start_date, end_date=end_date, include_idle=False, limit=None)
     road_distribution = _get_road_distribution(records)
     density_distribution = _get_density_distribution(records)
-    traffic_trend = [
-        {"time": _format_period_label(item.get("_id", {}), "week"), "vehicles": int(item.get("totalVehicles", 0) or 0)}
-        for item in weekly_groups
-    ]
-    waiting_trend = [
-        {"time": _format_period_label(item.get("_id", {}), "week"), "waiting": round(float(item.get("averageWaitingTime", 0) or 0), 2)}
-        for item in weekly_groups
-    ]
+
+    # Build weekly traffic trend and waiting trend from the filtered records
+    weekly_buckets = {}
+    for r in records:
+        ts = r.get("timestamp")
+        if not ts:
+            continue
+        year, week, _ = ts.isocalendar()
+        key = (year, week)
+        bucket = weekly_buckets.setdefault(key, {"vehicles": 0, "waiting_sum": 0.0, "count": 0})
+        bucket["vehicles"] += int(r.get("vehicle_count", 0) or 0)
+        bucket["waiting_sum"] += float(r.get("waiting_time", 0) or 0)
+        bucket["count"] += 1
+
+    traffic_trend = []
+    waiting_trend = []
+    for (year, week) in sorted(weekly_buckets.keys()):
+        bucket = weekly_buckets[(year, week)]
+        traffic_trend.append({"time": f"{year}-W{week:02d}", "vehicles": int(bucket["vehicles"])})
+        avg_wait = round(bucket["waiting_sum"] / bucket["count"], 2) if bucket["count"] else 0
+        waiting_trend.append({"time": f"{year}-W{week:02d}", "waiting": avg_wait})
 
     monitored_road_count = _get_monitored_road_count(records)
-    total_vehicles = int(sum(int(item.get("totalVehicles", 0) or 0) for item in weekly_groups))
+    total_vehicles = int(sum(int(r.get("vehicle_count", 0) or 0) for r in records))
     average_vehicles = round(float(total_vehicles / monitored_road_count), 2) if monitored_road_count else 0
 
     summary = {
@@ -219,7 +269,7 @@ def get_weekly_summary(start_date: Optional[str] = None, end_date: Optional[str]
         "highestDensity": _get_highest_density(records),
         "roadCount": monitored_road_count,
         "records": len(records),
-        "lastUpdated": records[-1].get("timestamp").isoformat() if records else None,
+        "lastUpdated": format_timestamp_for_display(records[-1].get("timestamp")) if records else None,
     }
 
     return {
@@ -257,20 +307,34 @@ def get_monthly_summary(start_date: Optional[str] = None, end_date: Optional[str
     if not monthly_groups:
         return {"status": "error", "message": "No analytics records found"}
 
-    records = list(collection.find(query).sort("timestamp", 1).hint("timestamp_asc").limit(2000))
+    records = get_history(start_date=start_date, end_date=end_date, include_idle=False, limit=None)
     road_distribution = _get_road_distribution(records)
     density_distribution = _get_density_distribution(records)
-    traffic_trend = [
-        {"time": _format_period_label(item.get("_id", {}), "month"), "vehicles": int(item.get("totalVehicles", 0) or 0)}
-        for item in monthly_groups
-    ]
-    waiting_trend = [
-        {"time": _format_period_label(item.get("_id", {}), "month"), "waiting": round(float(item.get("averageWaitingTime", 0) or 0), 2)}
-        for item in monthly_groups
-    ]
+
+    # Build monthly traffic trend and waiting trend from the filtered records
+    monthly_buckets = {}
+    for r in records:
+        ts = r.get("timestamp")
+        if not ts:
+            continue
+        year = ts.year
+        month = ts.month
+        key = (year, month)
+        bucket = monthly_buckets.setdefault(key, {"vehicles": 0, "waiting_sum": 0.0, "count": 0})
+        bucket["vehicles"] += int(r.get("vehicle_count", 0) or 0)
+        bucket["waiting_sum"] += float(r.get("waiting_time", 0) or 0)
+        bucket["count"] += 1
+
+    traffic_trend = []
+    waiting_trend = []
+    for (year, month) in sorted(monthly_buckets.keys()):
+        bucket = monthly_buckets[(year, month)]
+        traffic_trend.append({"time": f"{year}-{month:02d}", "vehicles": int(bucket["vehicles"])})
+        avg_wait = round(bucket["waiting_sum"] / bucket["count"], 2) if bucket["count"] else 0
+        waiting_trend.append({"time": f"{year}-{month:02d}", "waiting": avg_wait})
 
     monitored_road_count = _get_monitored_road_count(records)
-    total_vehicles = int(sum(int(item.get("totalVehicles", 0) or 0) for item in monthly_groups))
+    total_vehicles = int(sum(int(r.get("vehicle_count", 0) or 0) for r in records))
     average_vehicles = round(float(total_vehicles / monitored_road_count), 2) if monitored_road_count else 0
 
     summary = {
@@ -283,7 +347,7 @@ def get_monthly_summary(start_date: Optional[str] = None, end_date: Optional[str
         "highestDensity": _get_highest_density(records),
         "roadCount": monitored_road_count,
         "records": len(records),
-        "lastUpdated": records[-1].get("timestamp").isoformat() if records else None,
+        "lastUpdated": format_timestamp_for_display(records[-1].get("timestamp")) if records else None,
     }
 
     return {

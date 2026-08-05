@@ -4,9 +4,9 @@ import base64
 import csv
 import io
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from analytics import get_history, get_today_summary, get_weekly_summary, get_monthly_summary
-from analytics import _filter_meaningful_records
 
 
 def build_report_range(range_name: str):
@@ -24,6 +24,36 @@ def build_report_range(range_name: str):
         start = now - timedelta(days=30)
         end = now
     return start, end
+
+
+def _format_timestamp(timestamp):
+    """
+    Convert MongoDB UTC timestamp to Asia/Kolkata and
+    return: DD-MM-YYYY hh:mm:ss AM/PM
+    """
+    if not timestamp:
+        return ""
+
+    kolkata = ZoneInfo("Asia/Kolkata")
+
+    try:
+        if isinstance(timestamp, str):
+            timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        timestamp = timestamp.astimezone(kolkata)
+
+        return timestamp.strftime("%d-%m-%Y %I:%M:%S %p")
+
+    except Exception:
+        return str(timestamp)
+
+
+def _get_range_records(range_name: str):
+    start, end = build_report_range(range_name)
+    return get_history(start_date=start.isoformat(), end_date=end.isoformat(), include_idle=True, limit=None)
 
 
 def _build_summary_payload(range_name: str):
@@ -51,9 +81,10 @@ def build_pdf_report(range_name: str):
 
     summary = payload.get("summary", {})
     charts = payload.get("charts", {})
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # generated_at should be shown in Asia/Kolkata local time with required format
+    generated_at = _format_timestamp(datetime.now(timezone.utc))
 
-    records = _filter_meaningful_records(get_history())
+    records = _get_range_records(range_name)
     summary_lines = [
         "AI-Based Smart Traffic Congestion Optimization System",
         "",
@@ -115,7 +146,7 @@ def build_pdf_report(range_name: str):
     return base64.b64encode(pdf_bytes).decode("ascii")
 
 
-def build_csv_report(range_name: str = "today", records=None):
+def build_csv_report(range_name="today", records=None):
     if records is None:
         try:
             payload = _build_summary_payload(range_name)
@@ -125,15 +156,31 @@ def build_csv_report(range_name: str = "today", records=None):
         if payload.get("status") != "success":
             raise ValueError("No data available for export.")
 
-        records = get_history()
+        records = _get_range_records(range_name)
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Timestamp", "Road", "Vehicle Count", "Density", "Signal Status", "Waiting Time", "Recommended Green Time", "Prediction"])
-    filtered_records = _filter_meaningful_records(records)
-    for record in sorted(filtered_records, key=lambda item: item.get("timestamp") or datetime.min, reverse=True):
+
+    writer.writerow([
+        "Timestamp",
+        "Road",
+        "Vehicle Count",
+        "Density",
+        "Signal Status",
+        "Waiting Time",
+        "Recommended Green Time",
+        "Prediction"
+    ])
+
+    records = sorted(
+        records,
+        key=lambda r: r.get("timestamp") or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+
+    for record in records:
         writer.writerow([
-            record.get("timestamp"),
+            _format_timestamp(record.get("timestamp")),
             record.get("road_name") or f"Road {record.get('road_id', '')}",
             record.get("vehicle_count", 0),
             record.get("density_level", "LOW"),
@@ -142,4 +189,12 @@ def build_csv_report(range_name: str = "today", records=None):
             record.get("recommended_green_time", 0),
             record.get("prediction", "N/A"),
         ])
-    return output.getvalue()
+
+    csv_data = output.getvalue()
+
+    # Debug (remove later if desired)
+    print("\n===== GENERATED CSV =====")
+    print(csv_data.splitlines()[:5])
+    print("=========================\n")
+
+    return csv_data

@@ -66,7 +66,8 @@ class AnalyticsQueryBehaviorTests(unittest.TestCase):
             analytics._get_collection = original_get_collection
 
         self.assertTrue(collection.aggregate_calls[0].get("allowDiskUse"))
-        self.assertEqual(collection.find_result.limit_value, 2000)
+        # Summary now requests full history (no default 2000 limit)
+        self.assertIsNone(collection.find_result.limit_value)
 
     def test_weekly_and_monthly_summary_use_recent_windows(self):
         collection = FakeCollection([{"timestamp": datetime.now(timezone.utc), "vehicle_count": 3, "density_level": "LOW"}])

@@ -18,6 +18,7 @@ function formatTimestamp(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hour12: true,
   });
 }
 
@@ -28,7 +29,7 @@ function Analytics() {
   const [error, setError] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [trendData, setTrendData] = useState([]);
-  const [selectedView, setSelectedView] = useState("live");
+  const [selectedView, setSelectedView] = useState("today");
   const [historicalSummary, setHistoricalSummary] = useState(null);
   const [historicalCharts, setHistoricalCharts] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -184,7 +185,7 @@ function Analytics() {
         leastBusyRoad: summary.leastBusyRoad || "None",
         highestDensity: summary.highestDensity || "NONE",
         currentTimer: 0,
-        roadCount: summary.records || 0,
+        roadCount: summary.roadCount || 0,
         systemStatus: error ? "OFFLINE" : "RUNNING",
         lastUpdated: summary.lastUpdated ? formatTimestamp(summary.lastUpdated) : "Not available",
         hasTraffic: (summary.totalVehicles || 0) > 0,

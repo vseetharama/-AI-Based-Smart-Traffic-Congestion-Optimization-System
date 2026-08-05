@@ -2,7 +2,10 @@
 # AI Traffic System - YOLO Vehicle Detection + Data Storage
 # =========================================================
 
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 
 _shared_yolo_model = None
 

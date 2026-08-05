@@ -1,0 +1,8 @@
+HTTP/1.1 500 INTERNAL SERVER ERROR
+Server: Werkzeug/3.0.0 Python/3.14.0
+Date: Wed, 05 Aug 2026 05:06:42 GMT
+Content-Type: application/json
+Content-Length: 70
+Access-Control-Allow-Origin: *
+Connection: close
+
