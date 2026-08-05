@@ -113,16 +113,19 @@ class Worker:
                     continue
 
                 if self._is_current_green():
-                    # When this road is currently GREEN, vehicles are flowing.
-                    # Do not count them as congestion until it becomes RED again.
-                    vehicle_count = 0
-                else:
-                    try:
-                        with yolo_inference_lock:
-                            vehicle_count, _, _ = detect_vehicles(frame, model=self.model)
-                    except Exception as e:
-                        logger.error("YOLO inference error for %s: %s", self.road_id, e)
-                        continue
+                    # Pause YOLO detections for the current GREEN road to avoid
+                    # writing artificial zero values. Keep previous road state
+                    # unchanged so MongoDB and analytics receive only true
+                    # observations. Resume updates once the road becomes RED.
+                    time.sleep(0.01)
+                    continue
+
+                try:
+                    with yolo_inference_lock:
+                        vehicle_count, _, _ = detect_vehicles(frame, model=self.model)
+                except Exception as e:
+                    logger.error("YOLO inference error for %s: %s", self.road_id, e)
+                    continue
 
                 density = self._calculate_density(vehicle_count)
                 density_level = self._density_level(density)

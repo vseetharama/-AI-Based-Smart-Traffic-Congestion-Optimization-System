@@ -55,6 +55,13 @@ class TrafficController:
         return best[1]
 
     def _compute_waiting_time(self, snapshot, current_green_road, current_timer, target_road_id):
+        """Estimate waiting time by simulating future GREEN order among RED roads.
+
+        This function builds the future order by repeatedly selecting the highest
+        priority RED road (by Hybrid Score) and summing recommended green times
+        until the target road is reached. This produces realistic staggered
+        waiting times (e.g., 35, 95, 135 seconds) rather than identical waits.
+        """
         if not current_green_road:
             return 0
 
@@ -62,51 +69,28 @@ class TrafficController:
             return 0
 
         waiting_time = max(int(current_timer or 0), 0)
-        current_road = current_green_road
+        # Start by considering the next switch; exclude the currently green road
+        # from immediate consideration and simulate RED-only competition.
+        simulated_snapshot = {rid: data.copy() for rid, data in snapshot.items()}
         seen_roads = set()
 
         while True:
-            if current_road in seen_roads:
+            # pick next red road with highest hybrid score excluding already seen
+            next_road = self._select_green_road(simulated_snapshot, exclude_road=current_green_road)
+            if next_road in seen_roads:
                 break
-            seen_roads.add(current_road)
+            seen_roads.add(next_road)
 
-            next_road = self._select_green_road(snapshot, exclude_road=current_road)
             if next_road == target_road_id:
                 return waiting_time
 
-            if next_road == current_road:
-                break
-
-            next_time = snapshot.get(next_road, {}).get("recommended_green_time", 0) or 0
+            next_time = simulated_snapshot.get(next_road, {}).get("recommended_green_time", 0) or 0
             waiting_time += max(int(next_time), 0)
-            current_road = next_road
 
-        return waiting_time
-        if not current_green_road:
-            return 0
-
-        if target_road_id == current_green_road:
-            return 0
-
-        waiting_time = max(int(current_timer or 0), 0)
-        current_road = current_green_road
-        seen_roads = set()
-
-        while True:
-            if current_road in seen_roads:
-                break
-            seen_roads.add(current_road)
-
-            next_road = self._select_green_road(snapshot)
-            if next_road == target_road_id:
-                return waiting_time
-
-            if next_road == current_road:
-                break
-
-            next_time = snapshot.get(next_road, {}).get("recommended_green_time", 0) or 0
-            waiting_time += max(int(next_time), 0)
-            current_road = next_road
+            # simulate that this road will be green next (so it won't be chosen again)
+            simulated_snapshot[next_road]["_simulated_played"] = True
+            # to avoid reselecting it, remove it from consideration
+            simulated_snapshot.pop(next_road, None)
 
         return waiting_time
 
@@ -147,6 +131,38 @@ class TrafficController:
             processed_snapshot[road_id] = processed_data
 
         road_summaries = self._build_road_summaries(processed_snapshot, current_green_road, current_timer)
+
+        # Compute priorities and attach hybrid scores and estimated waiting times.
+        # Only RED roads participate in priority calculation; the current GREEN
+        # road is labeled as CURRENT.
+        red_roads = [r for r in road_summaries.keys() if r != current_green_road]
+        # sort red roads by hybrid score descending
+        sorted_red = sorted(
+            red_roads,
+            key=lambda rid: (
+                road_summaries[rid].get("hybrid_score", 0),
+                -int(rid.replace("road", "")),
+            ),
+            reverse=True,
+        )
+
+        # assign priority labels
+        priorities = {}
+        labels = ["NEXT GREEN", "SECOND", "THIRD"]
+        for i, rid in enumerate(sorted_red):
+            priorities[rid] = labels[i] if i < len(labels) else f"P{i+1}"
+
+        # current green road priority
+        if current_green_road:
+            priorities[current_green_road] = "CURRENT"
+
+        # attach priority and hybrid score to summaries
+        for rid, summary in road_summaries.items():
+            summary["hybrid_score"] = self._hybrid_score(processed_snapshot.get(rid, {}))
+            summary["priority"] = priorities.get(rid, "")
+            # ensure waiting_time is recalculated using the simulated ordering
+            summary["waiting_time"] = 0 if rid == current_green_road else self._compute_waiting_time(processed_snapshot, current_green_road, current_timer, rid)
+
         with controller_state_lock:
             controller_state.update({
                 "current_green_road": current_green_road,
@@ -174,7 +190,10 @@ class TrafficController:
                         self.current_timer,
                     )
                 else:
-                    selected_road = self._select_green_road(snapshot)
+                    # When switching, exclude the current green road from
+                    # consideration so only RED roads compete for the next green.
+                    exclude = self.current_green_road
+                    selected_road = self._select_green_road(snapshot, exclude_road=exclude)
                     selected_time = snapshot.get(selected_road, {}).get("recommended_green_time", 0) or 0
                     self.current_green_road = selected_road
                     self.current_timer = selected_time

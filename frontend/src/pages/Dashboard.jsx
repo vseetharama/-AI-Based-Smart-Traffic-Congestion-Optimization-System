@@ -53,6 +53,9 @@ function Dashboard() {
             predictionStatus: summary?.prediction_status || "unknown",
             densityLevel: summary?.density_level || "UNKNOWN",
             densityScore: summary?.density_score ?? 0,
+            hybridScore: summary?.hybrid_score ?? 0,
+            estimatedWaiting: summary?.waiting_time ?? 0,
+            priority: summary?.priority || "",
             recommendedGreenTime: summary?.recommended_green_time ?? 0,
             lastUpdated: summary?.last_updated || null,
           }));
