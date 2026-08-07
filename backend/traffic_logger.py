@@ -91,6 +91,8 @@ class TrafficLogger:
                         "waiting_time": int(summary.get("waiting_time", 0) or 0),
                         "recommended_green_time": tracked_state["recommended_green_time"],
                         "prediction": summary.get("prediction", "unknown"),
+                        "predicted_vehicle_count": summary.get("predicted_vehicle_count", 0),
+                        "prediction_status": summary.get("prediction_status", "failure"),
                         "current_green_road": current_green_road,
                         "current_timer": int(current_timer or 0),
                     }

@@ -91,8 +91,9 @@ class AnalyticsQueryBehaviorTests(unittest.TestCase):
         finally:
             analytics._get_collection = original_get_collection
 
-        self.assertEqual(collection.find_result.sort_calls[0], ("timestamp", 1))
+        self.assertEqual(collection.find_result.sort_calls[0], ("timestamp", -1))
         self.assertEqual(collection.find_result.limit_value, 2000)
+        self.assertIsNone(collection.find_result.hint_value)
 
 
 if __name__ == "__main__":

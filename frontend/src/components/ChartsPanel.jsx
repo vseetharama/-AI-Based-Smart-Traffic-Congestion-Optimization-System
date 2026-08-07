@@ -43,6 +43,11 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
     return densityDistribution.filter((item) => Number(item.value) > 0);
   }, [densityDistribution]);
 
+  const densityLabelUnit = densityData ? "Traffic Records" : "roads";
+  const densitySubtitle = densityData
+    ? "Historical traffic records by density level"
+    : "Current density mix across monitored roads";
+
   const vehicleBars = useMemo(() => {
     return roads.map((road) => ({
       name: road.name,
@@ -77,7 +82,7 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
       </div>
 
       <div className="col-12 col-xl-6">
-        <ChartCard title="Traffic Density Distribution" subtitle="Current density mix across monitored roads">
+        <ChartCard title="Traffic Density Distribution" subtitle={densitySubtitle}>
           {hasTraffic ? (
             <div className="d-flex flex-column align-items-center" style={{ width: "100%", minHeight: 320 }}>
               <div style={{ width: "100%", height: 260 }}>
@@ -100,7 +105,7 @@ function ChartsPanel({ roads, trendData, hasTraffic, densityData = null, waiting
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value, name) => [`${value} roads`, name]}
+                      formatter={(value, name) => [`${value} ${densityLabelUnit}`, name]}
                       contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px" }}
                     />
                   </PieChart>

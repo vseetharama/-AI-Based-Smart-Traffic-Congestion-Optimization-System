@@ -1,17 +1,6 @@
 import StatsCard from "./StatsCard";
 
-function formatTimestamp(timestamp) {
-  if (!timestamp) return "Not available";
-
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Not available";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
+import { formatTimestamp } from "../utils/dateUtils";
 
 function StatsPanel({ roads, status, lastUpdated, activeRoadId, currentTimer }) {
   const totalVehicles = roads.reduce((sum, road) => sum + (road.vehicleCount || 0), 0);

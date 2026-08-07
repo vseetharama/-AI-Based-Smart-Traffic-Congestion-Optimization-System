@@ -127,7 +127,7 @@ def get_history(
     collection = _get_collection()
     _ensure_timestamp_index(collection)
     query = _build_date_filter(start_date, end_date, default_delta=default_delta)
-    cursor = collection.find(query).sort("timestamp", 1).hint("timestamp_asc")
+    cursor = collection.find(query).sort("timestamp", -1)
     if limit is not None:
         cursor = cursor.limit(limit)
     records = list(cursor)
@@ -451,7 +451,7 @@ def _get_traffic_trend(records):
         timestamp = record.get("timestamp")
         if not timestamp:
             continue
-        label = timestamp.strftime("%H:%M")
+        label = timestamp.strftime("%I:%M %p")
         grouped[label] = grouped.get(label, 0) + int(record.get("vehicle_count", 0) or 0)
 
     return [{"time": time_label, "vehicles": value} for time_label, value in sorted(grouped.items())]
@@ -466,7 +466,7 @@ def _get_waiting_trend(records):
         timestamp = record.get("timestamp")
         if not timestamp:
             continue
-        label = timestamp.strftime("%H:%M")
+        label = timestamp.strftime("%I:%M %p")
         grouped[label] = grouped.get(label, 0) + float(record.get("waiting_time", 0) or 0)
 
     return [{"time": time_label, "waiting": round(value, 2)} for time_label, value in sorted(grouped.items())]

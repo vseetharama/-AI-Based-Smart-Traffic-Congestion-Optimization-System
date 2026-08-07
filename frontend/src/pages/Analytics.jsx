@@ -8,19 +8,7 @@ import ChartsPanel from "../components/ChartsPanel";
 import InsightCard from "../components/InsightCard";
 import { getDashboard, getAnalyticsToday, getAnalyticsWeekly, getAnalyticsMonthly, exportAnalyticsReport } from "../api/trafficApi";
 
-function formatTimestamp(timestamp) {
-  if (!timestamp) return "Not available";
-
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Not available";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-}
+import { formatTimestamp, formatTime } from "../utils/dateUtils";
 
 function Analytics() {
   const navigate = useNavigate();
@@ -101,7 +89,7 @@ function Analytics() {
         const totalVehicles = mappedRoads.reduce((sum, road) => sum + (road.vehicleCount || 0), 0);
 
         setTrendData((previous) => {
-          const next = [...previous, { label: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), totalVehicles }];
+          const next = [...previous, { label: formatTime(new Date()), totalVehicles }];
           return next.slice(-30);
         });
 

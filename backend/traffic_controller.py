@@ -132,36 +132,42 @@ class TrafficController:
 
         road_summaries = self._build_road_summaries(processed_snapshot, current_green_road, current_timer)
 
-        # Compute priorities and attach hybrid scores and estimated waiting times.
-        # Only RED roads participate in priority calculation; the current GREEN
-        # road is labeled as CURRENT.
+        # Compute hybrid scores first so priority and waiting time use the same order.
+        for rid, summary in road_summaries.items():
+            summary["hybrid_score"] = self._hybrid_score(processed_snapshot.get(rid, {}))
+
+        # Only RED roads participate in priority calculation; the current GREEN road is CURRENT.
         red_roads = [r for r in road_summaries.keys() if r != current_green_road]
-        # sort red roads by hybrid score descending
         sorted_red = sorted(
             red_roads,
             key=lambda rid: (
-                road_summaries[rid].get("hybrid_score", 0),
+                road_summaries[rid]["hybrid_score"],
                 -int(rid.replace("road", "")),
             ),
             reverse=True,
         )
 
-        # assign priority labels
         priorities = {}
         labels = ["NEXT GREEN", "SECOND", "THIRD"]
         for i, rid in enumerate(sorted_red):
             priorities[rid] = labels[i] if i < len(labels) else f"P{i+1}"
 
-        # current green road priority
         if current_green_road:
             priorities[current_green_road] = "CURRENT"
 
-        # attach priority and hybrid score to summaries
+        waiting_times = {}
+        if current_green_road is not None:
+            waiting = max(int(current_timer or 0), 0)
+            for rid in sorted_red:
+                waiting_times[rid] = waiting
+                waiting += max(int(road_summaries[rid].get("recommended_green_time", 0) or 0), 0)
+
         for rid, summary in road_summaries.items():
-            summary["hybrid_score"] = self._hybrid_score(processed_snapshot.get(rid, {}))
             summary["priority"] = priorities.get(rid, "")
-            # ensure waiting_time is recalculated using the simulated ordering
-            summary["waiting_time"] = 0 if rid == current_green_road else self._compute_waiting_time(processed_snapshot, current_green_road, current_timer, rid)
+            if rid == current_green_road:
+                summary["waiting_time"] = 0
+            else:
+                summary["waiting_time"] = waiting_times.get(rid, 0)
 
         with controller_state_lock:
             controller_state.update({
